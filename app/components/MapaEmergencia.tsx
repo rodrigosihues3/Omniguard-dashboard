@@ -83,6 +83,7 @@ export default function MapaEmergencia({ ubicacion, tema = 'dark' }: MapaEmergen
         url={modoClaro
           ? 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png'
           : 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'}
+        subdomains="abcd"
         attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
       />
       <Marker position={[coords.lat, coords.lng]}>

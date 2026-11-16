@@ -17,6 +17,7 @@ const FILTROS = ['pendiente', 'en_proceso', 'culminado', 'falsa_alarma'];
 
 const colorEstado: Record<string, string> = {
   pendiente: '#FFC300',
+  asignado: '#FFC300',
   en_proceso: '#4361EE',
   culminado: '#2DC653',
   falsa_alarma: '#666666',
@@ -167,8 +168,11 @@ function hexToRgba(hex: string, alpha: number) {
 }
 
 function getAccionesPermitidas(estadoActual?: string) {
-  const estadoNormalizado = (estadoActual || '').toLowerCase() as EstadoEmergencia;
-  return ESTADOS_HABILITADOS_POR_ESTADO[estadoNormalizado] || [];
+  const estadoNormalizado = (estadoActual || '').toLowerCase();
+  if (estadoNormalizado === 'asignado') {
+    return ESTADOS_HABILITADOS_POR_ESTADO.pendiente;
+  }
+  return ESTADOS_HABILITADOS_POR_ESTADO[estadoNormalizado as EstadoEmergencia] || [];
 }
 
 
@@ -391,7 +395,7 @@ export default function DashboardPage() {
     return () => window.clearInterval(interval);
   }, [usuario, cargarEmergencias]);
 
-  const actualizarEstado = async (id: string, nuevoEstado: string) => {
+  const actualizarEstado = async (id: string, nuevoEstado: string, companiaAsignadaId?: string) => {
     setActualizando(true);
     const toastId = toast.loading(
       <span style={{ fontWeight: 500, fontSize: '13.5px' }}>Actualizando estado...</span>,
@@ -441,7 +445,7 @@ export default function DashboardPage() {
         if (compData) unidadesActuales = compData.unidades_disponibles;
       }
 
-      if (estadoAnterior === 'pendiente' && nuevoEstado === 'en_proceso') {
+      if ((estadoAnterior === 'pendiente' || estadoAnterior === 'asignado') && nuevoEstado === 'en_proceso') {
         if (unidadesActuales <= 0) {
           toast.error(
             <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
@@ -482,10 +486,10 @@ export default function DashboardPage() {
         }
       }
 
-      console.log('🔍 Debug:', { estadoAnterior, nuevoEstado, companiaId, unidadesActuales });
+      console.log('Debug:', { estadoAnterior, nuevoEstado, companiaId, unidadesActuales });
 
       let deltaUnidades = 0;
-      if (estadoAnterior === 'pendiente' && nuevoEstado === 'en_proceso') {
+      if ((estadoAnterior === 'pendiente' || estadoAnterior === 'asignado') && nuevoEstado === 'en_proceso') {
         deltaUnidades = -1;
       } else if (estadoAnterior === 'en_proceso' &&
         (nuevoEstado === 'culminado' || nuevoEstado === 'falsa_alarma')) {
@@ -510,34 +514,35 @@ export default function DashboardPage() {
           .update({ unidades_disponibles: nuevasUnidades })
           .eq('id', companiaId);
 
-        console.log('🔄 Update unidades:', {
+        console.log('Update unidades:', {
           companiaId, unidadesActuales, deltaUnidades, nuevasUnidades, error: updateError
         });
       }
 
-      const response = await fetch(
-        `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/actualizar-estado`,
-        {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            emergencia_id: id,
-            nuevo_estado: nuevoEstado,
-            bombero_id: usuario?.id || 'dashboard',
-          }),
-        }
-      );
+      const payloadUpdate = companiaAsignadaId
+        ? { compania_asignada_id: companiaAsignadaId, estado: 'asignado' }
+        : { estado: nuevoEstado };
 
-      const data = await response.json();
-      if (data.success) {
+      const { error: updateEmergenciaError } = await supabase
+        .from('emergencias')
+        .update(payloadUpdate)
+        .eq('id', id);
+
+      if (!updateEmergenciaError) {
+        const estadoFinal = companiaAsignadaId ? 'asignado' : nuevoEstado;
+        setEmergencias((prev) =>
+          prev.map((item) =>
+            item.id === id ? { ...item, ...payloadUpdate } : item
+          )
+        );
+        setSeleccionada((prev: any) =>
+          prev && prev.id === id ? { ...prev, ...payloadUpdate } : prev
+        );
         toast.success(
           <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
             <span style={{ fontWeight: 600, fontSize: '14px', color: ui.text }}>Estado Actualizado</span>
             <span style={{ fontSize: '12.5px', color: ui.mutedText }}>
-              Incidente cambiado a: <strong>{nuevoEstado.replace('_', ' ').toUpperCase()}</strong>
+              Incidente cambiado a: <strong>{estadoFinal.replace('_', ' ').toUpperCase()}</strong>
             </span>
           </div>,
           {
@@ -570,6 +575,7 @@ export default function DashboardPage() {
         );
         await cargarEmergencias();
         if (companiaId) await cargarCompania(companiaId);
+        if (companiaAsignadaId) await cargarCompania(companiaAsignadaId);
       } else {
         toast.error(
           <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
@@ -707,7 +713,11 @@ export default function DashboardPage() {
   };
 
   const emergenciasFiltradas = emergencias
-    .filter(e => e.estado === filtro)
+    .filter(e =>
+      filtro === 'pendiente'
+        ? e.estado === 'pendiente' || e.estado === 'asignado'
+        : e.estado === filtro
+    )
     .sort((a, b) => {
       const aPulsing = pulsingEmergencies[a.id] ? 1 : 0;
       const bPulsing = pulsingEmergencies[b.id] ? 1 : 0;
@@ -718,7 +728,7 @@ export default function DashboardPage() {
     });
 
   const contadores = {
-    pendiente: emergencias.filter(e => e.estado === 'pendiente').length,
+    pendiente: emergencias.filter(e => e.estado === 'pendiente' || e.estado === 'asignado').length,
     en_proceso: emergencias.filter(e => e.estado === 'en_proceso').length,
     culminado: emergencias.filter(e => e.estado === 'culminado').length,
   };

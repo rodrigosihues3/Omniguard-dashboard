@@ -1,17 +1,21 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const supabaseServiceRole = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://placeholder.supabase.co';
+const supabaseServiceRole = process.env.SUPABASE_SERVICE_ROLE_KEY || 'placeholder-service-role-key';
 
-if (!supabaseUrl || !supabaseServiceRole) {
-  console.error('Service route: missing SUPABASE_SERVICE_ROLE_KEY or NEXT_PUBLIC_SUPABASE_URL');
-}
-
-const supabaseAdmin = createClient(supabaseUrl || '', supabaseServiceRole || '');
+const supabaseAdmin = createClient(supabaseUrl, supabaseServiceRole);
 
 export async function POST(request: Request) {
   try {
+    if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
+      console.error('Service route: missing SUPABASE_SERVICE_ROLE_KEY or NEXT_PUBLIC_SUPABASE_URL');
+      return NextResponse.json(
+        { error: 'Configuración de Supabase incompleta en el servidor' },
+        { status: 500 }
+      );
+    }
+
     const body = await request.json();
 
     // Basic server-side validation/sanitization
@@ -35,13 +39,12 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Longitud inválida. Debe estar entre -180 y 180' }, { status: 400 });
     }
 
-    const ubicacion = `SRID=4326;POINT(${longitud} ${latitud})`;
-
     const insertPayload = {
       nombre,
       direccion,
       telefono,
-      ubicacion,
+      latitud: Number(latitud),
+      longitud: Number(longitud),
       unidades_totales,
       unidades_disponibles: activa ? unidades_totales : 0,
       activa,
@@ -71,6 +74,14 @@ export async function POST(request: Request) {
 
 export async function PATCH(request: Request) {
   try {
+    if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
+      console.error('Service route: missing SUPABASE_SERVICE_ROLE_KEY or NEXT_PUBLIC_SUPABASE_URL');
+      return NextResponse.json(
+        { error: 'Configuración de Supabase incompleta en el servidor' },
+        { status: 500 }
+      );
+    }
+
     const body = await request.json();
     const { emergenciaId, companiaId } = body;
 
