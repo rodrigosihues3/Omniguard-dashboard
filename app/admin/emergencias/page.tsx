@@ -17,7 +17,7 @@ export default function EmergenciasPage() {
 
     const emergenciasFiltradas = emergencias.filter((e) => e.estado === filtro);
 
-    const mostrarReasignar = filtro === 'pendiente';
+    const mostrarReasignar = filtro === 'pendiente' || filtro === 'asignado';
     const gridColumns = mostrarReasignar
         ? '1.6fr 1.8fr 1.2fr 0.8fr 1fr 1.8fr'
         : '1.6fr 1.8fr 1.2fr 0.8fr 1fr';
@@ -184,7 +184,7 @@ export default function EmergenciasPage() {
                                             fontSize: '12px',
                                             color: ui.mutedText,
                                         }}>
-                                            {reasignandoEsta ? '⏳' : '▾'}
+                                            {reasignandoEsta ? '...' : '▾'}
                                         </span>
                                     </div>
                                 )}

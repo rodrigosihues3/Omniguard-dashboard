@@ -7,11 +7,12 @@ import toast, { Toaster } from 'react-hot-toast';
 import MapaEmergencia from '@/app/components/MapaEmergencia';
 import NuevaEmergenciaPopup from '@/app/components/NuevaEmergenciaPopup';
 import PanelDetalleEmergencia from '@/app/components/dashboard/PanelDetalleEmergencia';
+import PanelGestionFlota from '@/app/components/dashboard/PanelGestionFlota';
 import PanelMapaCalor from '@/app/components/dashboard/PanelMapaCalor';
 import VistaVacia from '@/app/components/dashboard/VistaVacia';
 
 
-type VistaPrincipal = 'detalle' | 'mapaCalor' | 'vacio';
+type VistaPrincipal = 'detalle' | 'mapaCalor' | 'vacio' | 'gestionFlota';
 
 const FILTROS = ['pendiente', 'en_proceso', 'culminado', 'falsa_alarma'];
 
@@ -197,6 +198,8 @@ export default function DashboardPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [actualizando, setActualizando] = useState(false);
   const [compania, setCompania] = useState<any>(null);
+  const [unidades, setUnidades] = useState<any[]>([]);
+  const seleccionadaRef = useRef<any>(null);
   const [modalTestigos, setModalTestigos] = useState<any>(null);
   const [testigos, setTestigos] = useState<any[]>([]);
   const [cargandoTestigos, setCargandoTestigos] = useState(false);
@@ -273,6 +276,10 @@ export default function DashboardPage() {
     emergenciasIdsPreviasRef.current = idsActuales;
   }, [usuario?.compania_id]);
 
+  useEffect(() => {
+    seleccionadaRef.current = seleccionada;
+  }, [seleccionada]);
+
   const cargarCompania = useCallback(async (companiaId: string) => {
     const { data, error } = await supabase
       .from('companias_bomberos')
@@ -280,6 +287,16 @@ export default function DashboardPage() {
       .eq('id', companiaId)
       .single();
     if (!error && data) setCompania(data);
+  }, []);
+
+  const cargarUnidades = useCallback(async (companiaId: string) => {
+    const { data, error } = await supabase
+      .from('unidades_bomberos')
+      .select('id, codigo_unidad, tipo_unidad, estado, activa')
+      .eq('compania_id', companiaId)
+      .eq('activa', true)
+      .order('codigo_unidad', { ascending: true });
+    if (!error && data) setUnidades(data);
   }, []);
 
   const cargarEmergencias = useCallback(async (usuarioData?: any) => {
@@ -293,8 +310,10 @@ export default function DashboardPage() {
           id, tipo, estado, etiqueta_ia, testigos,
           direccion_aproximada, nivel_confianza_ia, foto_url, descripcion,
           creado_en, actualizado_en, compania_asignada_id, usuario_id,
+          unidad_asignada_id, foto_cierre_url, informe_bombero,
           companias_bomberos (nombre, telefono),
-          usuarios (dni, nombres, apellidos)
+          usuarios (dni, nombres, apellidos),
+          unidades_bomberos (codigo_unidad, tipo_unidad)
         `)
         .order('creado_en', { ascending: false })
         .limit(100);
@@ -332,8 +351,8 @@ export default function DashboardPage() {
 
       registrarNuevasEmergencias(emergenciasConUbicacion);
 
-      if (seleccionada) {
-        const actualizada = emergenciasConUbicacion.find((e: any) => e.id === seleccionada.id);
+      if (seleccionadaRef.current) {
+        const actualizada = emergenciasConUbicacion.find((e: any) => e.id === seleccionadaRef.current.id);
         if (actualizada) setSeleccionada(actualizada);
       }
 
@@ -346,7 +365,7 @@ export default function DashboardPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [usuario, seleccionada, registrarNuevasEmergencias]);
+  }, [usuario, registrarNuevasEmergencias]);
 
   useEffect(() => {
     const session = localStorage.getItem('dashboard_session');
@@ -364,36 +383,83 @@ export default function DashboardPage() {
 
     if (sessionData.compania_id) {
       cargarCompania(sessionData.compania_id);
+      cargarUnidades(sessionData.compania_id);
     }
   }, [router]);
 
   useEffect(() => {
     if (!usuario) return;
 
+    const filtroCompania =
+      usuario.rol !== 'admin' && usuario.compania_id
+        ? `compania_asignada_id=eq.${usuario.compania_id}`
+        : undefined;
+
     const channel = supabase
       .channel('realtime-dashboard')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'emergencias' }, () => {
-        cargarEmergencias();
-      })
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'emergencias',
+          ...(filtroCompania ? { filter: filtroCompania } : {}),
+        },
+        () => {
+          cargarEmergencias();
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'emergencias',
+          ...(filtroCompania ? { filter: filtroCompania } : {}),
+        },
+        () => {
+          cargarEmergencias();
+        }
+      )
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'companias_bomberos' }, (payload) => {
         if (payload.new.id === usuario?.compania_id) {
           setCompania(payload.new);
         }
-      })
-      .subscribe();
+      });
+
+    if (usuario.compania_id) {
+      channel.on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'unidades_bomberos',
+          filter: `compania_id=eq.${usuario.compania_id}`,
+        },
+        () => {
+          cargarUnidades(usuario.compania_id);
+          cargarCompania(usuario.compania_id);
+        }
+      );
+    }
+
+    channel.subscribe();
 
     return () => { supabase.removeChannel(channel); };
-  }, [usuario, cargarEmergencias]);
+  }, [usuario, cargarEmergencias, cargarUnidades, cargarCompania]);
 
   useEffect(() => {
     if (!usuario) return;
 
     const interval = window.setInterval(() => {
       cargarEmergencias();
+      if (usuario?.compania_id) {
+        cargarUnidades(usuario.compania_id);
+      }
     }, 10000);
 
     return () => window.clearInterval(interval);
-  }, [usuario, cargarEmergencias]);
+  }, [usuario, cargarEmergencias, cargarUnidades]);
 
   const actualizarEstado = async (id: string, nuevoEstado: string, companiaAsignadaId?: string) => {
     setActualizando(true);
@@ -647,6 +713,255 @@ export default function DashboardPage() {
           }
         }
       );
+    } finally {
+      setActualizando(false);
+    }
+  };
+
+  const despacharUnidad = async (emergenciaId: string, unidadId: string) => {
+    if (!unidadId) return;
+    setActualizando(true);
+    const toastId = toast.loading(
+      <span style={{ fontWeight: 500, fontSize: '13.5px' }}>Despachando unidad...</span>,
+      {
+        style: {
+          background: modoClaro ? '#FFFFFF' : '#161616',
+          color: ui.text,
+          border: `1px solid ${ui.border}`,
+          borderRadius: '12px',
+          padding: '12px 16px',
+        },
+      }
+    );
+
+    try {
+      const { error: errorEmergencia } = await supabase
+        .from('emergencias')
+        .update({ unidad_asignada_id: unidadId })
+        .eq('id', emergenciaId);
+
+      if (errorEmergencia) throw errorEmergencia;
+
+      const { error: errorUnidad } = await supabase
+        .from('unidades_bomberos')
+        .update({ estado: 'en_servicio' })
+        .eq('id', unidadId);
+
+      if (errorUnidad) throw errorUnidad;
+
+      const companiaId = seleccionadaRef.current?.compania_asignada_id || usuario?.compania_id;
+      if (companiaId) {
+        const { data: compData } = await supabase
+          .from('companias_bomberos')
+          .select('unidades_disponibles')
+          .eq('id', companiaId)
+          .single();
+
+        if (compData) {
+          const nuevasDisponibles = Math.max((compData.unidades_disponibles ?? 0) - 1, 0);
+          await supabase
+            .from('companias_bomberos')
+            .update({ unidades_disponibles: nuevasDisponibles })
+            .eq('id', companiaId);
+        }
+
+        await cargarUnidades(companiaId);
+        await cargarCompania(companiaId);
+      }
+
+      await cargarEmergencias();
+
+      toast.success(
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+          <span style={{ fontWeight: 600, fontSize: '14px', color: ui.text }}>Unidad despachada</span>
+          <span style={{ fontSize: '12.5px', color: ui.mutedText }}>
+            La unidad ha sido asignada a la emergencia.
+          </span>
+        </div>,
+        {
+          id: toastId,
+          style: {
+            background: modoClaro ? '#FFFFFF' : '#161616',
+            color: ui.text,
+            border: `1px solid ${ui.border}`,
+            borderRadius: '12px',
+            padding: '12px 16px',
+          },
+          duration: 2500,
+        }
+      );
+    } catch (error) {
+      console.error('Error al despachar unidad:', error);
+      toast.error(
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+          <span style={{ fontWeight: 600, fontSize: '14px', color: ui.text }}>Error al despachar</span>
+          <span style={{ fontSize: '12.5px', color: ui.mutedText }}>
+            No se pudo completar el despacho de la unidad.
+          </span>
+        </div>,
+        {
+          id: toastId,
+          style: {
+            background: modoClaro ? '#FFFFFF' : '#161616',
+            color: ui.text,
+            border: `1px solid ${ui.border}`,
+            borderRadius: '12px',
+            padding: '12px 16px',
+          },
+        }
+      );
+    } finally {
+      setActualizando(false);
+    }
+  };
+
+  const reasignarUnidad = async (emergencia: any, nuevaUnidadId: string, motivo: string): Promise<boolean> => {
+    if (!emergencia?.id || !emergencia?.unidad_asignada_id || !nuevaUnidadId || motivo.trim().length < 5) {
+      return false;
+    }
+
+    setActualizando(true);
+    const toastId = toast.loading(
+      <span style={{ fontWeight: 500, fontSize: '13.5px' }}>Reasignando unidad...</span>,
+      {
+        style: {
+          background: modoClaro ? '#FFFFFF' : '#161616',
+          color: ui.text,
+          border: `1px solid ${ui.border}`,
+          borderRadius: '12px',
+          padding: '12px 16px',
+        },
+      }
+    );
+
+    try {
+      const unidadAnteriorId = emergencia.unidad_asignada_id;
+      const unidadAnteriorObj = unidades.find((u) => u.id === unidadAnteriorId);
+      const unidadNuevaObj = unidades.find((u) => u.id === nuevaUnidadId);
+
+      const codigoAnterior =
+        emergencia.unidades_bomberos?.codigo_unidad ||
+        unidadAnteriorObj?.codigo_unidad ||
+        unidadAnteriorId;
+      const codigoNuevo = unidadNuevaObj?.codigo_unidad || nuevaUnidadId;
+
+      const { error: errorLiberar } = await supabase
+        .from('unidades_bomberos')
+        .update({ estado: 'disponible' })
+        .eq('id', unidadAnteriorId);
+
+      if (errorLiberar) throw errorLiberar;
+
+      const { error: errorOcupar } = await supabase
+        .from('unidades_bomberos')
+        .update({ estado: 'en_servicio' })
+        .eq('id', nuevaUnidadId);
+
+      if (errorOcupar) throw errorOcupar;
+
+      const registroReasignacion = `[REASIGNACION DE UNIDAD: ${codigoAnterior} -> ${codigoNuevo} | Motivo: ${motivo.trim()}]`;
+      const informeActualizado = emergencia.informe_bombero
+        ? `${emergencia.informe_bombero}\n${registroReasignacion}`
+        : registroReasignacion;
+      const actualizadoEn = new Date().toISOString();
+
+      const { error: errorEmergencia } = await supabase
+        .from('emergencias')
+        .update({
+          unidad_asignada_id: nuevaUnidadId,
+          actualizado_en: actualizadoEn,
+          informe_bombero: informeActualizado,
+        })
+        .eq('id', emergencia.id);
+
+      if (errorEmergencia) throw errorEmergencia;
+
+      const unidadJoinNueva = unidadNuevaObj
+        ? { codigo_unidad: unidadNuevaObj.codigo_unidad, tipo_unidad: unidadNuevaObj.tipo_unidad }
+        : emergencia.unidades_bomberos;
+
+      setUnidades((prev) =>
+        prev.map((u) => {
+          if (u.id === unidadAnteriorId) return { ...u, estado: 'disponible' };
+          if (u.id === nuevaUnidadId) return { ...u, estado: 'en_servicio' };
+          return u;
+        })
+      );
+
+      setEmergencias((prev) =>
+        prev.map((item) =>
+          item.id === emergencia.id
+            ? {
+                ...item,
+                unidad_asignada_id: nuevaUnidadId,
+                actualizado_en: actualizadoEn,
+                informe_bombero: informeActualizado,
+                unidades_bomberos: unidadJoinNueva,
+              }
+            : item
+        )
+      );
+
+      setSeleccionada((prev: any) =>
+        prev && prev.id === emergencia.id
+          ? {
+              ...prev,
+              unidad_asignada_id: nuevaUnidadId,
+              actualizado_en: actualizadoEn,
+              informe_bombero: informeActualizado,
+              unidades_bomberos: unidadJoinNueva,
+            }
+          : prev
+      );
+
+      const companiaId = emergencia.compania_asignada_id || usuario?.compania_id;
+      if (companiaId) {
+        await cargarUnidades(companiaId);
+      }
+      await cargarEmergencias();
+
+      toast.success(
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+          <span style={{ fontWeight: 600, fontSize: '14px', color: ui.text }}>Unidad reasignada</span>
+          <span style={{ fontSize: '12.5px', color: ui.mutedText }}>
+            {codigoAnterior} reemplazada por {codigoNuevo}.
+          </span>
+        </div>,
+        {
+          id: toastId,
+          style: {
+            background: modoClaro ? '#FFFFFF' : '#161616',
+            color: ui.text,
+            border: `1px solid ${ui.border}`,
+            borderRadius: '12px',
+            padding: '12px 16px',
+          },
+          duration: 2500,
+        }
+      );
+
+      return true;
+    } catch (error) {
+      console.error('Error al reasignar unidad:', error);
+      toast.error(
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+          <span style={{ fontWeight: 600, fontSize: '14px', color: ui.text }}>Error al reasignar</span>
+          <span style={{ fontSize: '12.5px', color: ui.mutedText }}>
+            No se pudo completar la reasignación de unidad.
+          </span>
+        </div>,
+        {
+          id: toastId,
+          style: {
+            background: modoClaro ? '#FFFFFF' : '#161616',
+            color: ui.text,
+            border: `1px solid ${ui.border}`,
+            borderRadius: '12px',
+            padding: '12px 16px',
+          },
+        }
+      );
+      return false;
     } finally {
       setActualizando(false);
     }
@@ -941,6 +1256,7 @@ export default function DashboardPage() {
         {/* Contador unidades */}
         {usuario.rol !== 'admin' && unidadesDisponibles !== null && (
           <div style={{
+            position: 'relative',
             margin: '16px 16px 8px 16px',
             padding: '16px',
             backgroundColor: modoClaro ? 'rgba(45, 198, 83, 0.05)' : 'rgba(45, 198, 83, 0.12)',
@@ -952,6 +1268,40 @@ export default function DashboardPage() {
             alignItems: 'center',
             gap: '4px',
           }}>
+            <button
+              type="button"
+              onClick={() => {
+                if (vistaActiva === 'gestionFlota') {
+                  setVistaActiva(seleccionada ? 'detalle' : 'vacio');
+                } else {
+                  setVistaActiva('gestionFlota');
+                }
+              }}
+              title="Gestionar unidades y cuentas operativas"
+              aria-label="Gestionar unidades y cuentas operativas"
+              style={{
+                position: 'absolute',
+                top: '10px',
+                right: '10px',
+                width: '26px',
+                height: '26px',
+                borderRadius: '6px',
+                border: `1px solid ${vistaActiva === 'gestionFlota' ? '#4361EE' : ui.border}`,
+                backgroundColor: vistaActiva === 'gestionFlota'
+                  ? 'rgba(67, 97, 238, 0.14)'
+                  : (modoClaro ? 'rgba(255, 255, 255, 0.7)' : 'rgba(255, 255, 255, 0.05)'),
+                color: vistaActiva === 'gestionFlota' ? '#4361EE' : ui.mutedText,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+              }}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="3" />
+                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
+              </svg>
+            </button>
             <div style={{ fontSize: '10px', fontWeight: 700, color: sinUnidades ? '#E63946' : '#2DC653', letterSpacing: '0.05em' }}>
               UNIDADES DISPONIBLES
             </div>
@@ -1408,17 +1758,30 @@ export default function DashboardPage() {
           <PanelMapaCalor ui={ui} tema={tema} />
         )}
 
+        {vistaActiva === 'gestionFlota' && usuario.compania_id && (
+          <PanelGestionFlota
+            companiaId={usuario.compania_id}
+            companiaNombre={compania?.nombre || ''}
+            ui={ui}
+            tema={tema}
+            onFlotaActualizada={async () => {
+              if (usuario?.compania_id) {
+                await cargarUnidades(usuario.compania_id);
+                await cargarCompania(usuario.compania_id);
+              }
+            }}
+          />
+        )}
+
         {vistaActiva === 'detalle' && seleccionada && (
           <PanelDetalleEmergencia
             seleccionada={seleccionada}
             ui={ui}
             tema={tema}
-            accionesPermitidas={accionesPermitidas}
-            estadoActualSeleccionado={estadoActualSeleccionado}
-            sinUnidades={sinUnidades}
+            unidades={unidades}
             actualizando={actualizando}
-            actualizarEstado={actualizarEstado}
-            ACCIONES_EMERGENCIA={ACCIONES_EMERGENCIA}
+            despacharUnidad={despacharUnidad}
+            reasignarUnidad={reasignarUnidad}
             formatFecha={formatFecha}
             verTestigos={verTestigos}
           />

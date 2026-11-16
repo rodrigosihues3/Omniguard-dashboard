@@ -1,18 +1,128 @@
 'use client';
 
+import { useState } from 'react';
+import toast from 'react-hot-toast';
 import { useAdminContext } from '../AdminContext';
+import { Compania } from '../admin.styles';
+import { MapPickerCanvas } from '../components/MapPickerCanvas';
 import { useCompanias } from './useCompanias';
 
+const DEFAULT_COORDS = { lat: -6.7714, lng: -79.8449 };
+
+function extraerCoordenadasCompania(compania: Compania): { lat: number; lng: number } {
+    if (
+        typeof compania.latitud === 'number' &&
+        !Number.isNaN(compania.latitud) &&
+        typeof compania.longitud === 'number' &&
+        !Number.isNaN(compania.longitud)
+    ) {
+        return { lat: compania.latitud, lng: compania.longitud };
+    }
+
+    if (typeof compania.ubicacion === 'string') {
+        const match = compania.ubicacion.match(/POINT\(([-\d.]+)\s+([-\d.]+)\)/i);
+        if (match) {
+            const lng = Number.parseFloat(match[1]);
+            const lat = Number.parseFloat(match[2]);
+            if (!Number.isNaN(lat) && !Number.isNaN(lng)) {
+                return { lat, lng };
+            }
+        }
+    }
+
+    return DEFAULT_COORDS;
+}
+
 export default function CompaniasPage() {
-    const { ui, modoClaro } = useAdminContext();
+    const { ui, modoClaro, tema } = useAdminContext();
     const {
         companias,
         isLoading,
-        editando,
-        setEditando,
-        actualizarUnidades,
+        guardandoEdicion,
+        actualizarCompania,
         toggleActiva,
     } = useCompanias();
+
+    const [companiaEditando, setCompaniaEditando] = useState<Compania | null>(null);
+    const [direccion, setDireccion] = useState('');
+    const [telefono, setTelefono] = useState('');
+    const [unidadesTotales, setUnidadesTotales] = useState<string>('1');
+    const [latitud, setLatitud] = useState<string>('');
+    const [longitud, setLongitud] = useState<string>('');
+    const [mapCoords, setMapCoords] = useState<{ lat: number; lng: number }>(DEFAULT_COORDS);
+
+    const abrirModalEdicion = (compania: Compania) => {
+        const coords = extraerCoordenadasCompania(compania);
+        setCompaniaEditando(compania);
+        setDireccion(compania.direccion || '');
+        setTelefono(compania.telefono || '');
+        setUnidadesTotales(String(compania.unidades_totales ?? 0));
+        setLatitud(coords.lat.toFixed(6));
+        setLongitud(coords.lng.toFixed(6));
+        setMapCoords(coords);
+    };
+
+    const handleCoordsChange = (coords: { lat: number; lng: number }) => {
+        setMapCoords(coords);
+        setLatitud(coords.lat.toFixed(6));
+        setLongitud(coords.lng.toFixed(6));
+    };
+
+    const handleLatInput = (valor: string) => {
+        setLatitud(valor);
+        const parsed = Number.parseFloat(valor);
+        if (!Number.isNaN(parsed) && parsed >= -90 && parsed <= 90) {
+            setMapCoords((prev) => ({ ...prev, lat: parsed }));
+        }
+    };
+
+    const handleLngInput = (valor: string) => {
+        setLongitud(valor);
+        const parsed = Number.parseFloat(valor);
+        if (!Number.isNaN(parsed) && parsed >= -180 && parsed <= 180) {
+            setMapCoords((prev) => ({ ...prev, lng: parsed }));
+        }
+    };
+
+    const handleGuardarEdicion = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!companiaEditando) return;
+
+        const direccionLimpia = direccion.trim();
+        const telefonoLimpio = telefono.trim();
+        const totalNum = Number.parseInt(unidadesTotales, 10);
+        const latNum = Number.parseFloat(latitud);
+        const lngNum = Number.parseFloat(longitud);
+
+        if (!direccionLimpia) {
+            toast.error('La dirección es obligatoria');
+            return;
+        }
+        if (Number.isNaN(totalNum) || totalNum < 0) {
+            toast.error('Ingrese una cantidad válida de unidades');
+            return;
+        }
+        if (Number.isNaN(latNum) || latNum < -90 || latNum > 90) {
+            toast.error('La latitud debe estar entre -90 y 90');
+            return;
+        }
+        if (Number.isNaN(lngNum) || lngNum < -180 || lngNum > 180) {
+            toast.error('La longitud debe estar entre -180 y 180');
+            return;
+        }
+
+        const ok = await actualizarCompania(companiaEditando.id, {
+            direccion: direccionLimpia,
+            telefono: telefonoLimpio,
+            unidades_totales: totalNum,
+            latitud: latNum,
+            longitud: lngNum,
+        });
+
+        if (ok) {
+            setCompaniaEditando(null);
+        }
+    };
 
     const cardStyle = {
         backgroundColor: ui.panel,
@@ -225,32 +335,7 @@ export default function CompaniasPage() {
                             <div style={{ color: ui.mutedText, fontSize: '12px' }}>{compania.direccion}</div>
                             <div style={{ color: ui.mutedText, fontSize: '12px', textAlign: 'center' }}>{compania.telefono}</div>
                             <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-                                {editando === compania.id ? (
-                                    <input
-                                        type="number"
-                                        defaultValue={compania.unidades_totales}
-                                        min="0"
-                                        max="10"
-                                        onBlur={(e) => actualizarUnidades(compania.id, parseInt(e.target.value))}
-                                        onKeyDown={(e) => {
-                                            if (e.key === 'Enter') {
-                                                actualizarUnidades(compania.id, parseInt((e.target as HTMLInputElement).value));
-                                            }
-                                        }}
-                                        style={{
-                                            width: '60px',
-                                            padding: '6px',
-                                            backgroundColor: ui.surface,
-                                            border: '1px solid #E63946',
-                                            borderRadius: '8px',
-                                            color: ui.text,
-                                            textAlign: 'center',
-                                        }}
-                                        autoFocus
-                                    />
-                                ) : (
-                                    <span style={{ fontWeight: 'bold', color: '#E63946' }}>{compania.unidades_totales}</span>
-                                )}
+                                <span style={{ fontWeight: 'bold', color: '#E63946' }}>{compania.unidades_totales}</span>
                             </div>
                             <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
                                 <span style={{
@@ -264,75 +349,39 @@ export default function CompaniasPage() {
                                 </span>
                             </div>
                             <div style={{ display: 'flex', gap: '8px', alignItems: 'center', justifyContent: 'center' }}>
-                                {editando === compania.id ? (
-                                    <button
-                                        onClick={() => setEditando(null)}
-                                        style={{
-                                            display: 'inline-flex',
-                                            alignItems: 'center',
-                                            justifyContent: 'center',
-                                            width: '32px',
-                                            height: '32px',
-                                            borderRadius: '8px',
-                                            border: `1px solid ${ui.border}`,
-                                            backgroundColor: ui.neutralButton,
-                                            color: ui.dangerText || '#E63946',
-                                            cursor: 'pointer',
-                                            transition: 'all 0.2s ease',
-                                            outline: 'none',
-                                        }}
-                                        onMouseEnter={(e) => {
-                                            e.currentTarget.style.transform = 'translateY(-1px)';
-                                            e.currentTarget.style.boxShadow = '0 4px 10px rgba(230, 57, 70, 0.15)';
-                                            e.currentTarget.style.backgroundColor = 'rgba(230, 57, 70, 0.08)';
-                                        }}
-                                        onMouseLeave={(e) => {
-                                            e.currentTarget.style.transform = 'none';
-                                            e.currentTarget.style.boxShadow = 'none';
-                                            e.currentTarget.style.backgroundColor = ui.neutralButton;
-                                        }}
-                                        title="Cancelar edición"
-                                    >
-                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                                            <path d="M18 6 6 18" />
-                                            <path d="m6 6 12 12" />
-                                        </svg>
-                                    </button>
-                                ) : (
-                                    <button
-                                        onClick={() => setEditando(compania.id)}
-                                        style={{
-                                            display: 'inline-flex',
-                                            alignItems: 'center',
-                                            justifyContent: 'center',
-                                            width: '32px',
-                                            height: '32px',
-                                            borderRadius: '8px',
-                                            border: `1px solid ${ui.border}`,
-                                            backgroundColor: ui.neutralButton,
-                                            color: ui.text,
-                                            cursor: 'pointer',
-                                            transition: 'all 0.2s ease',
-                                            outline: 'none',
-                                        }}
-                                        onMouseEnter={(e) => {
-                                            e.currentTarget.style.transform = 'translateY(-1px)';
-                                            e.currentTarget.style.boxShadow = '0 4px 10px rgba(0, 0, 0, 0.05)';
-                                            e.currentTarget.style.filter = 'brightness(0.95)';
-                                        }}
-                                        onMouseLeave={(e) => {
-                                            e.currentTarget.style.transform = 'none';
-                                            e.currentTarget.style.boxShadow = 'none';
-                                            e.currentTarget.style.filter = 'none';
-                                        }}
-                                        title="Editar unidades"
-                                    >
-                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                                            <path d="M12 20h9" />
-                                            <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />
-                                        </svg>
-                                    </button>
-                                )}
+                                <button
+                                    onClick={() => abrirModalEdicion(compania)}
+                                    style={{
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        width: '32px',
+                                        height: '32px',
+                                        borderRadius: '8px',
+                                        border: `1px solid ${ui.border}`,
+                                        backgroundColor: ui.neutralButton,
+                                        color: ui.text,
+                                        cursor: 'pointer',
+                                        transition: 'all 0.2s ease',
+                                        outline: 'none',
+                                    }}
+                                    onMouseEnter={(e) => {
+                                        e.currentTarget.style.transform = 'translateY(-1px)';
+                                        e.currentTarget.style.boxShadow = '0 4px 10px rgba(0, 0, 0, 0.05)';
+                                        e.currentTarget.style.filter = 'brightness(0.95)';
+                                    }}
+                                    onMouseLeave={(e) => {
+                                        e.currentTarget.style.transform = 'none';
+                                        e.currentTarget.style.boxShadow = 'none';
+                                        e.currentTarget.style.filter = 'none';
+                                    }}
+                                    title="Editar compañía y ubicación"
+                                >
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                        <path d="M12 20h9" />
+                                        <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />
+                                    </svg>
+                                </button>
                                 <button
                                     onClick={() => toggleActiva(compania.id, compania.activa)}
                                     style={{
@@ -388,6 +437,238 @@ export default function CompaniasPage() {
                     ))
                 )}
             </div>
+
+            {companiaEditando && (
+                <div
+                    onClick={() => !guardandoEdicion && setCompaniaEditando(null)}
+                    style={{
+                        position: 'fixed',
+                        inset: 0,
+                        zIndex: 5000,
+                        backgroundColor: ui.modalBackdrop,
+                        backdropFilter: 'blur(8px)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        padding: '24px',
+                    }}
+                >
+                    <form
+                        onClick={(e) => e.stopPropagation()}
+                        onSubmit={handleGuardarEdicion}
+                        style={{
+                            width: 'min(680px, 100%)',
+                            maxHeight: '90vh',
+                            overflowY: 'auto',
+                            background: ui.modalPanel,
+                            border: `1px solid ${ui.modalBorder}`,
+                            borderRadius: '20px',
+                            padding: '24px',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: '16px',
+                        }}
+                    >
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px' }}>
+                            <div>
+                                <h2 style={{ margin: 0, fontSize: '18px', fontWeight: 700, color: ui.text }}>
+                                    Editar Compañía y Ubicación
+                                </h2>
+                                <p style={{ margin: '4px 0 0', fontSize: '13px', color: ui.mutedText }}>
+                                    {companiaEditando.nombre}
+                                </p>
+                            </div>
+                            <button
+                                type="button"
+                                disabled={guardandoEdicion}
+                                onClick={() => setCompaniaEditando(null)}
+                                style={{
+                                    background: ui.neutralButton,
+                                    border: 'none',
+                                    borderRadius: '8px',
+                                    color: ui.neutralButtonText,
+                                    width: '32px',
+                                    height: '32px',
+                                    cursor: 'pointer',
+                                    fontWeight: 700,
+                                }}
+                            >
+                                X
+                            </button>
+                        </div>
+
+                        <div>
+                            <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: ui.mutedText, marginBottom: '6px' }}>
+                                Dirección
+                            </label>
+                            <input
+                                type="text"
+                                required
+                                value={direccion}
+                                onChange={(e) => setDireccion(e.target.value)}
+                                style={{
+                                    width: '100%',
+                                    padding: '10px 12px',
+                                    borderRadius: '10px',
+                                    border: `1px solid ${ui.fieldBorder}`,
+                                    backgroundColor: ui.fieldBackground,
+                                    color: ui.text,
+                                    fontSize: '13.5px',
+                                    outline: 'none',
+                                }}
+                            />
+                        </div>
+
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                            <div>
+                                <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: ui.mutedText, marginBottom: '6px' }}>
+                                    Teléfono
+                                </label>
+                                <input
+                                    type="text"
+                                    value={telefono}
+                                    onChange={(e) => setTelefono(e.target.value)}
+                                    style={{
+                                        width: '100%',
+                                        padding: '10px 12px',
+                                        borderRadius: '10px',
+                                        border: `1px solid ${ui.fieldBorder}`,
+                                        backgroundColor: ui.fieldBackground,
+                                        color: ui.text,
+                                        fontSize: '13.5px',
+                                        outline: 'none',
+                                    }}
+                                />
+                            </div>
+                            <div>
+                                <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: ui.mutedText, marginBottom: '6px' }}>
+                                    Unidades Totales
+                                </label>
+                                <input
+                                    type="number"
+                                    min={0}
+                                    max={20}
+                                    required
+                                    value={unidadesTotales}
+                                    onChange={(e) => setUnidadesTotales(e.target.value)}
+                                    style={{
+                                        width: '100%',
+                                        padding: '10px 12px',
+                                        borderRadius: '10px',
+                                        border: `1px solid ${ui.fieldBorder}`,
+                                        backgroundColor: ui.fieldBackground,
+                                        color: ui.text,
+                                        fontSize: '13.5px',
+                                        outline: 'none',
+                                    }}
+                                />
+                            </div>
+                        </div>
+
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                            <div>
+                                <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: ui.mutedText, marginBottom: '6px' }}>
+                                    Latitud
+                                </label>
+                                <input
+                                    type="text"
+                                    required
+                                    value={latitud}
+                                    onChange={(e) => handleLatInput(e.target.value)}
+                                    style={{
+                                        width: '100%',
+                                        padding: '10px 12px',
+                                        borderRadius: '10px',
+                                        border: `1px solid ${ui.fieldBorder}`,
+                                        backgroundColor: ui.fieldBackground,
+                                        color: ui.text,
+                                        fontSize: '13.5px',
+                                        outline: 'none',
+                                    }}
+                                />
+                            </div>
+                            <div>
+                                <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: ui.mutedText, marginBottom: '6px' }}>
+                                    Longitud
+                                </label>
+                                <input
+                                    type="text"
+                                    required
+                                    value={longitud}
+                                    onChange={(e) => handleLngInput(e.target.value)}
+                                    style={{
+                                        width: '100%',
+                                        padding: '10px 12px',
+                                        borderRadius: '10px',
+                                        border: `1px solid ${ui.fieldBorder}`,
+                                        backgroundColor: ui.fieldBackground,
+                                        color: ui.text,
+                                        fontSize: '13.5px',
+                                        outline: 'none',
+                                    }}
+                                />
+                            </div>
+                        </div>
+
+                        <div>
+                            <div style={{ fontSize: '12px', fontWeight: 600, color: ui.mutedText, marginBottom: '8px' }}>
+                                Haz clic o arrastra el marcador en el mapa para ajustar la ubicación exacta
+                            </div>
+                            <div style={{
+                                height: '260px',
+                                width: '100%',
+                                borderRadius: '16px',
+                                overflow: 'hidden',
+                                border: `1px solid ${ui.border}`,
+                                backgroundColor: ui.mapPickerPanel,
+                            }}>
+                                <MapPickerCanvas
+                                    key={companiaEditando.id}
+                                    tema={tema}
+                                    coords={mapCoords}
+                                    onChange={handleCoordsChange}
+                                />
+                            </div>
+                        </div>
+
+                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '4px' }}>
+                            <button
+                                type="button"
+                                disabled={guardandoEdicion}
+                                onClick={() => setCompaniaEditando(null)}
+                                style={{
+                                    padding: '10px 18px',
+                                    borderRadius: '10px',
+                                    border: `1px solid ${ui.border}`,
+                                    backgroundColor: ui.neutralButton,
+                                    color: ui.neutralButtonText,
+                                    fontWeight: 600,
+                                    fontSize: '13px',
+                                    cursor: 'pointer',
+                                }}
+                            >
+                                Cancelar
+                            </button>
+                            <button
+                                type="submit"
+                                disabled={guardandoEdicion}
+                                style={{
+                                    padding: '10px 20px',
+                                    borderRadius: '10px',
+                                    border: 'none',
+                                    backgroundColor: ui.primaryButton,
+                                    color: '#FFFFFF',
+                                    fontWeight: 700,
+                                    fontSize: '13px',
+                                    cursor: guardandoEdicion ? 'not-allowed' : 'pointer',
+                                }}
+                            >
+                                {guardandoEdicion ? 'Guardando...' : 'Guardar Cambios'}
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            )}
         </div>
     );
 }

@@ -5,6 +5,8 @@ export interface Compania {
   nombre: string;
   direccion: string;
   telefono: string;
+  latitud?: number | null;
+  longitud?: number | null;
   ubicacion?: string | null;
   unidades_disponibles: number;
   unidades_totales: number;

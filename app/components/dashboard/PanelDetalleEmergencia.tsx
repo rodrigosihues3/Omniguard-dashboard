@@ -1,37 +1,59 @@
 import React from 'react';
 import MapaEmergencia from '../MapaEmergencia';
-import { iconoTipo, colorEstado, colorEtiquetaIA } from '@/app/dashboard/dashboard.styles'; // Ajusta la ruta si es necesario
-
-// Función auxiliar local para los botones
-function hexToRgba(hex: string, alpha: number) {
-    const limpio = hex.replace('#', '');
-    const value = limpio.length === 3 ? limpio.split('').map((char) => char + char).join('') : limpio;
-    const red = parseInt(value.slice(0, 2), 16);
-    const green = parseInt(value.slice(2, 4), 16);
-    const blue = parseInt(value.slice(4, 6), 16);
-    return `rgba(${red}, ${green}, ${blue}, ${alpha})`;
-}
+import { iconoTipo, colorEstado, colorEtiquetaIA } from '@/app/dashboard/dashboard.styles';
 
 export default function PanelDetalleEmergencia({
     seleccionada,
     ui,
     tema,
-    accionesPermitidas,
-    estadoActualSeleccionado,
-    sinUnidades,
+    unidades = [],
     actualizando,
-    actualizarEstado,
-    ACCIONES_EMERGENCIA,
+    despacharUnidad,
+    reasignarUnidad,
     formatFecha,
     verTestigos
 }: any) {
     const modoClaro = tema === 'light';
     const [verEvidencia, setVerEvidencia] = React.useState(false);
     const [errorImagen, setErrorImagen] = React.useState(false);
+    const [unidadSeleccionadaId, setUnidadSeleccionadaId] = React.useState('');
+    const [modalReasignarAbierto, setModalReasignarAbierto] = React.useState(false);
+    const [nuevaUnidadId, setNuevaUnidadId] = React.useState('');
+    const [motivoReasignacion, setMotivoReasignacion] = React.useState('');
+
+    React.useEffect(() => {
+        setUnidadSeleccionadaId('');
+        setModalReasignarAbierto(false);
+        setNuevaUnidadId('');
+        setMotivoReasignacion('');
+    }, [seleccionada?.id]);
+
+    const unidadesDisponibles = React.useMemo(
+        () => (unidades || []).filter((u: any) => u.estado === 'disponible'),
+        [unidades]
+    );
+
+    const unidadesDisponiblesReasignacion = React.useMemo(
+        () => (unidades || []).filter(
+            (u: any) => u.estado === 'disponible' && u.id !== seleccionada?.unidad_asignada_id
+        ),
+        [unidades, seleccionada?.unidad_asignada_id]
+    );
+
+    const unidadAsignadaInfo = React.useMemo(() => {
+        if (!seleccionada?.unidad_asignada_id) return null;
+        if (seleccionada.unidades_bomberos) {
+            return seleccionada.unidades_bomberos;
+        }
+        return (unidades || []).find((u: any) => u.id === seleccionada.unidad_asignada_id) || null;
+    }, [seleccionada, unidades]);
+
+    const badgeColor = colorEstado[seleccionada.estado] || '#FFC300';
+    const esCerrada = seleccionada.estado === 'culminado' || seleccionada.estado === 'falsa_alarma';
 
     return (
         <div style={{ padding: '32px' }}>
-            {/* HEADER con título + estado + ACCIONES RÁPIDAS */}
+            {/* HEADER con título y badge de estado */}
             <div style={{
                 backgroundColor: ui.panel,
                 borderRadius: '16px',
@@ -44,7 +66,7 @@ export default function PanelDetalleEmergencia({
                 border: `1px solid ${ui.border}`,
                 boxShadow: modoClaro ? '0 16px 40px rgba(16, 35, 61, 0.06)' : 'none',
             }}>
-                <span style={{ fontSize: '40px' }}>{iconoTipo[seleccionada.tipo] || '🚨'}</span>
+                <span style={{ fontSize: '40px' }}>{iconoTipo[seleccionada.tipo] || null}</span>
                 <div style={{ flex: 1 }}>
                     <h1 style={{ fontSize: '24px', fontWeight: 'bold', margin: 0, color: ui.text }}>
                         {seleccionada.tipo}
@@ -57,60 +79,11 @@ export default function PanelDetalleEmergencia({
                 {/* Badge estado */}
                 <div style={{
                     padding: '8px 16px', borderRadius: '20px',
-                    backgroundColor: colorEstado[seleccionada.estado] + '22',
-                    color: colorEstado[seleccionada.estado],
+                    backgroundColor: badgeColor + '22',
+                    color: badgeColor,
                     fontWeight: 'bold', fontSize: '14px',
                 }}>
                     {seleccionada.estado.toUpperCase().replace('_', ' ')}
-                </div>
-
-                {/* Acciones rápidas */}
-                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                    {ACCIONES_EMERGENCIA.map((accion: any) => {
-                        const esAccionPermitida = accionesPermitidas.includes(accion.estado);
-                        const esEstadoActual = estadoActualSeleccionado === accion.estado;
-                        const bloqueadoPorUnidades = sinUnidades && accion.estado === 'en_proceso';
-                        const deshabilitado = actualizando || esEstadoActual || !esAccionPermitida || bloqueadoPorUnidades;
-
-                        const backgroundColor = deshabilitado
-                            ? (modoClaro ? 'rgba(16, 35, 61, 0.05)' : 'rgba(255, 255, 255, 0.04)')
-                            : hexToRgba(accion.color, modoClaro ? 0.16 : 0.2);
-                        const textColor = deshabilitado
-                            ? hexToRgba(accion.color, modoClaro ? 0.62 : 0.72)
-                            : accion.color;
-                        const borderColor = deshabilitado
-                            ? hexToRgba(accion.color, modoClaro ? 0.18 : 0.24)
-                            : hexToRgba(accion.color, modoClaro ? 0.35 : 0.42);
-                        const boxShadow = deshabilitado
-                            ? 'none'
-                            : `0 10px 24px ${hexToRgba(accion.color, modoClaro ? 0.15 : 0.18)}`;
-
-                        return (
-                            <button
-                                key={accion.estado}
-                                onClick={() => actualizarEstado(seleccionada.id, accion.estado)}
-                                disabled={deshabilitado}
-                                style={{
-                                    padding: '10px 16px',
-                                    borderRadius: '12px',
-                                    border: `1px solid ${borderColor}`,
-                                    cursor: deshabilitado ? 'not-allowed' : 'pointer',
-                                    backgroundColor,
-                                    color: textColor,
-                                    fontWeight: 800,
-                                    fontSize: '13px',
-                                    opacity: deshabilitado ? 0.56 : 1,
-                                    boxShadow,
-                                    transition: 'all 180ms ease',
-                                }}
-                            >
-                                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', verticalAlign: 'middle' }}>
-                                    <accion.Icon />
-                                    <span>{accion.label}</span>
-                                </span>
-                            </button>
-                        );
-                    })}
                 </div>
             </div>
 
@@ -210,6 +183,123 @@ export default function PanelDetalleEmergencia({
                             )}
                         </div>
                     </div>
+
+                    {/* Despacho de Unidad o Unidad Asignada */}
+                    {seleccionada.estado === 'asignado' && !seleccionada.unidad_asignada_id && (
+                        <div style={{
+                            backgroundColor: ui.panel,
+                            borderRadius: '16px',
+                            padding: '16px',
+                            border: `1px solid ${ui.border}`,
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: '10px',
+                        }}>
+                            <h3 style={{ color: ui.mutedText, fontSize: '11px', fontWeight: 700, margin: 0 }}>
+                                DESPACHO DE UNIDAD
+                            </h3>
+                            <select
+                                value={unidadSeleccionadaId}
+                                onChange={(e) => setUnidadSeleccionadaId(e.target.value)}
+                                disabled={actualizando || unidadesDisponibles.length === 0}
+                                style={{
+                                    width: '100%',
+                                    padding: '10px 12px',
+                                    borderRadius: '10px',
+                                    border: `1px solid ${ui.border}`,
+                                    backgroundColor: ui.surface,
+                                    color: ui.text,
+                                    fontSize: '13px',
+                                    outline: 'none',
+                                }}
+                            >
+                                <option value="">
+                                    {unidadesDisponibles.length === 0
+                                        ? 'Sin unidades disponibles'
+                                        : 'Seleccionar unidad disponible'}
+                                </option>
+                                {unidadesDisponibles.map((unidad: any) => (
+                                    <option key={unidad.id} value={unidad.id}>
+                                        {unidad.codigo_unidad} - {unidad.tipo_unidad}
+                                    </option>
+                                ))}
+                            </select>
+                            <button
+                                onClick={() => despacharUnidad(seleccionada.id, unidadSeleccionadaId)}
+                                disabled={!unidadSeleccionadaId || actualizando || unidadesDisponibles.length === 0}
+                                style={{
+                                    padding: '10px 16px',
+                                    borderRadius: '10px',
+                                    border: 'none',
+                                    backgroundColor: (!unidadSeleccionadaId || actualizando || unidadesDisponibles.length === 0)
+                                        ? ui.border
+                                        : '#4361EE',
+                                    color: (!unidadSeleccionadaId || actualizando || unidadesDisponibles.length === 0)
+                                        ? ui.mutedText
+                                        : '#FFFFFF',
+                                    fontWeight: 700,
+                                    fontSize: '13px',
+                                    cursor: (!unidadSeleccionadaId || actualizando || unidadesDisponibles.length === 0)
+                                        ? 'not-allowed'
+                                        : 'pointer',
+                                    transition: 'all 0.2s',
+                                }}
+                            >
+                                {actualizando ? 'Despachando...' : 'Despachar Unidad'}
+                            </button>
+                        </div>
+                    )}
+
+                    {seleccionada.unidad_asignada_id && (
+                        <div style={{
+                            backgroundColor: ui.panel,
+                            borderRadius: '16px',
+                            padding: '14px 16px',
+                            border: `1px solid ${ui.border}`,
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'center',
+                            gap: '12px',
+                        }}>
+                            <div>
+                                <h3 style={{ color: ui.mutedText, fontSize: '11px', fontWeight: 700, margin: '0 0 6px 0' }}>
+                                    UNIDAD DESPACHADA
+                                </h3>
+                                <div style={{ fontSize: '15px', fontWeight: 'bold', color: ui.text }}>
+                                    {unidadAsignadaInfo?.codigo_unidad || 'Unidad asignada'}
+                                </div>
+                                {unidadAsignadaInfo?.tipo_unidad && (
+                                    <div style={{ color: ui.mutedText, fontSize: '12px', marginTop: '4px' }}>
+                                        Tipo: {unidadAsignadaInfo.tipo_unidad}
+                                    </div>
+                                )}
+                            </div>
+                            {(seleccionada.estado === 'asignado' || seleccionada.estado === 'en_proceso') && (
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setNuevaUnidadId('');
+                                        setMotivoReasignacion('');
+                                        setModalReasignarAbierto(true);
+                                    }}
+                                    disabled={actualizando}
+                                    style={{
+                                        padding: '8px 12px',
+                                        borderRadius: '8px',
+                                        border: `1px solid ${ui.border}`,
+                                        backgroundColor: ui.surface,
+                                        color: ui.text,
+                                        fontSize: '12px',
+                                        fontWeight: 600,
+                                        cursor: actualizando ? 'not-allowed' : 'pointer',
+                                        whiteSpace: 'nowrap',
+                                    }}
+                                >
+                                    Cambiar Unidad
+                                </button>
+                            )}
+                        </div>
+                    )}
                 </div>
 
                 {/* Mapa */}
@@ -220,6 +310,255 @@ export default function PanelDetalleEmergencia({
                     </div>
                 </div>
             </div>
+
+            {/* Acta de Cierre en Campo */}
+            {esCerrada && (
+                <div style={{
+                    backgroundColor: ui.panel,
+                    borderRadius: '16px',
+                    padding: '20px',
+                    border: `1px solid ${ui.border}`,
+                    marginBottom: '16px',
+                }}>
+                    <h3 style={{ color: ui.mutedText, fontSize: '12px', fontWeight: 700, margin: '0 0 12px 0', textTransform: 'uppercase' }}>
+                        Acta de Cierre en Campo
+                    </h3>
+                    <div style={{
+                        padding: '14px 16px',
+                        borderRadius: '12px',
+                        backgroundColor: ui.surface,
+                        border: `1px solid ${ui.border}`,
+                        color: ui.text,
+                        fontSize: '14px',
+                        lineHeight: 1.6,
+                        marginBottom: seleccionada.foto_cierre_url ? '16px' : 0,
+                    }}>
+                        {seleccionada.informe_bombero || 'Sin informe registrado.'}
+                    </div>
+                    {seleccionada.foto_cierre_url && (
+                        <div>
+                            <div style={{ color: ui.mutedText, fontSize: '11px', fontWeight: 700, marginBottom: '8px', textTransform: 'uppercase' }}>
+                                Fotografía de cierre
+                            </div>
+                            <img
+                                src={seleccionada.foto_cierre_url}
+                                alt="Fotografía de cierre en campo"
+                                style={{
+                                    maxWidth: '100%',
+                                    maxHeight: '360px',
+                                    objectFit: 'contain',
+                                    borderRadius: '12px',
+                                    border: `1px solid ${ui.border}`,
+                                }}
+                            />
+                        </div>
+                    )}
+                </div>
+            )}
+
+            {/* Modal Reasignar Unidad */}
+            {modalReasignarAbierto && (
+                <div
+                    onClick={() => !actualizando && setModalReasignarAbierto(false)}
+                    style={{
+                        position: 'fixed',
+                        inset: 0,
+                        backgroundColor: 'rgba(0,0,0,0.65)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        zIndex: 99999,
+                        padding: '20px',
+                    }}
+                >
+                    <div
+                        onClick={(e) => e.stopPropagation()}
+                        style={{
+                            width: '440px',
+                            maxWidth: '95vw',
+                            backgroundColor: ui.panel,
+                            borderRadius: '12px',
+                            border: `1px solid ${ui.border}`,
+                            padding: '24px',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: '14px',
+                        }}
+                    >
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <div>
+                                <h2 style={{ margin: 0, fontSize: '17px', fontWeight: 700, color: ui.text }}>
+                                    Reasignar Unidad Despachada
+                                </h2>
+                                <p style={{ margin: '2px 0 0', fontSize: '12px', color: ui.mutedText }}>
+                                    Unidad actual: {unidadAsignadaInfo?.codigo_unidad || seleccionada.unidad_asignada_id}
+                                </p>
+                            </div>
+                            <button
+                                type="button"
+                                disabled={actualizando}
+                                onClick={() => setModalReasignarAbierto(false)}
+                                style={{
+                                    background: 'transparent',
+                                    border: `1px solid ${ui.border}`,
+                                    borderRadius: '6px',
+                                    color: ui.mutedText,
+                                    width: '28px',
+                                    height: '28px',
+                                    cursor: 'pointer',
+                                    fontWeight: 700,
+                                }}
+                            >
+                                X
+                            </button>
+                        </div>
+
+                        <div>
+                            <label style={{
+                                display: 'block',
+                                fontSize: '11px',
+                                fontWeight: 700,
+                                color: ui.mutedText,
+                                marginBottom: '6px',
+                                textTransform: 'uppercase',
+                            }}>
+                                Nueva Unidad Disponible
+                            </label>
+                            <select
+                                value={nuevaUnidadId}
+                                onChange={(e) => setNuevaUnidadId(e.target.value)}
+                                disabled={actualizando || unidadesDisponiblesReasignacion.length === 0}
+                                style={{
+                                    width: '100%',
+                                    padding: '10px 12px',
+                                    borderRadius: '8px',
+                                    border: `1px solid ${ui.border}`,
+                                    backgroundColor: ui.surface,
+                                    color: ui.text,
+                                    fontSize: '13px',
+                                    outline: 'none',
+                                }}
+                            >
+                                <option value="">
+                                    {unidadesDisponiblesReasignacion.length === 0
+                                        ? 'No hay otras unidades disponibles'
+                                        : 'Seleccionar nueva unidad'}
+                                </option>
+                                {unidadesDisponiblesReasignacion.map((unidad: any) => (
+                                    <option key={unidad.id} value={unidad.id}>
+                                        {unidad.codigo_unidad} - {unidad.tipo_unidad}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+
+                        <div>
+                            <label style={{
+                                display: 'block',
+                                fontSize: '11px',
+                                fontWeight: 700,
+                                color: ui.mutedText,
+                                marginBottom: '6px',
+                                textTransform: 'uppercase',
+                            }}>
+                                Motivo de Reasignación (obligatorio)
+                            </label>
+                            <textarea
+                                rows={3}
+                                value={motivoReasignacion}
+                                onChange={(e) => setMotivoReasignacion(e.target.value)}
+                                placeholder="Indique el motivo operativo del cambio de unidad (mínimo 5 caracteres)..."
+                                disabled={actualizando}
+                                style={{
+                                    width: '100%',
+                                    padding: '10px 12px',
+                                    borderRadius: '8px',
+                                    border: `1px solid ${ui.border}`,
+                                    backgroundColor: ui.surface,
+                                    color: ui.text,
+                                    fontSize: '13px',
+                                    resize: 'vertical',
+                                    outline: 'none',
+                                }}
+                            />
+                            {motivoReasignacion.trim().length > 0 && motivoReasignacion.trim().length < 5 && (
+                                <div style={{ fontSize: '11.5px', color: '#E63946', marginTop: '4px' }}>
+                                    El motivo debe tener al menos 5 caracteres.
+                                </div>
+                            )}
+                        </div>
+
+                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '4px' }}>
+                            <button
+                                type="button"
+                                disabled={actualizando}
+                                onClick={() => setModalReasignarAbierto(false)}
+                                style={{
+                                    padding: '9px 16px',
+                                    borderRadius: '8px',
+                                    border: `1px solid ${ui.border}`,
+                                    backgroundColor: 'transparent',
+                                    color: ui.mutedText,
+                                    fontSize: '13px',
+                                    fontWeight: 600,
+                                    cursor: 'pointer',
+                                }}
+                            >
+                                Cancelar
+                            </button>
+                            <button
+                                type="button"
+                                disabled={
+                                    actualizando ||
+                                    !nuevaUnidadId ||
+                                    motivoReasignacion.trim().length < 5 ||
+                                    unidadesDisponiblesReasignacion.length === 0
+                                }
+                                onClick={async () => {
+                                    if (!reasignarUnidad) return;
+                                    const ok = await reasignarUnidad(seleccionada, nuevaUnidadId, motivoReasignacion.trim());
+                                    if (ok) {
+                                        setModalReasignarAbierto(false);
+                                    }
+                                }}
+                                style={{
+                                    padding: '9px 18px',
+                                    borderRadius: '8px',
+                                    border: 'none',
+                                    backgroundColor: (
+                                        actualizando ||
+                                        !nuevaUnidadId ||
+                                        motivoReasignacion.trim().length < 5 ||
+                                        unidadesDisponiblesReasignacion.length === 0
+                                    )
+                                        ? ui.border
+                                        : '#4361EE',
+                                    color: (
+                                        actualizando ||
+                                        !nuevaUnidadId ||
+                                        motivoReasignacion.trim().length < 5 ||
+                                        unidadesDisponiblesReasignacion.length === 0
+                                    )
+                                        ? ui.mutedText
+                                        : '#FFFFFF',
+                                    fontSize: '13px',
+                                    fontWeight: 600,
+                                    cursor: (
+                                        actualizando ||
+                                        !nuevaUnidadId ||
+                                        motivoReasignacion.trim().length < 5 ||
+                                        unidadesDisponiblesReasignacion.length === 0
+                                    )
+                                        ? 'not-allowed'
+                                        : 'pointer',
+                                }}
+                            >
+                                {actualizando ? 'Reasignando...' : 'Confirmar Reasignación'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* Modal Lightbox Evidencia */}
             {verEvidencia && seleccionada.foto_url && (
@@ -277,7 +616,7 @@ export default function PanelDetalleEmergencia({
                         {/* Imagen o Error */}
                         {errorImagen ? (
                             <div style={{ padding: '40px 20px', color: '#E63946', textAlign: 'center', fontWeight: 'bold' }}>
-                                ⚠️ Error al cargar la evidencia (URL expirada o rota)
+                                Error al cargar la evidencia (URL expirada o rota)
                             </div>
                         ) : (
                             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: '100%' }}>

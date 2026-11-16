@@ -2,6 +2,7 @@ import React from 'react';
 
 export const colorEstado: Record<string, string> = {
     pendiente: '#FFC300',
+    asignado: '#F59E0B',
     en_proceso: '#4361EE',
     culminado: '#2DC653',
     falsa_alarma: '#666666',
@@ -71,10 +72,11 @@ export const colorEtiquetaIA: Record<string, string> = {
     pendiente: '#666666',
 };
 
-export const FILTROS_ESTADO = ['pendiente', 'en_proceso', 'culminado', 'falsa_alarma'] as const;
+export const FILTROS_ESTADO = ['pendiente', 'asignado', 'en_proceso', 'culminado', 'falsa_alarma'] as const;
 
 export const labelFiltro: Record<string, string> = {
     pendiente: 'Pendiente',
+    asignado: 'Asignado',
     en_proceso: 'En Proceso',
     culminado: 'Culminado',
     falsa_alarma: 'Falsa Alarma',
