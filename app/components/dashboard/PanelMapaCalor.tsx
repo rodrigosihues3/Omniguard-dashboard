@@ -6,9 +6,13 @@ import { supabase } from '@/lib/supabase';
 interface PanelMapaCalorProps {
     ui: any;
     tema: 'light' | 'dark';
+    companiaLat?: number | null;
+    companiaLng?: number | null;
 }
 
-export default function PanelMapaCalor({ ui, tema }: PanelMapaCalorProps) {
+const DEFAULT_LIMA_COORDS: [number, number] = [-12.1157, -77.0297];
+
+export default function PanelMapaCalor({ ui, tema, companiaLat, companiaLng }: PanelMapaCalorProps) {
     const [mesSeleccionado, setMesSeleccionado] = useState<string>('todos');
     const [coordenadasHist, setCoordenadasHist] = useState<any[]>([]);
     const [cargando, setCargando] = useState(false);
@@ -19,6 +23,14 @@ export default function PanelMapaCalor({ ui, tema }: PanelMapaCalorProps) {
     const containerRef = useRef<HTMLDivElement>(null);
 
     const modoClaro = tema === 'light';
+    const tieneCoordsCentral =
+        typeof companiaLat === 'number' &&
+        !Number.isNaN(companiaLat) &&
+        typeof companiaLng === 'number' &&
+        !Number.isNaN(companiaLng);
+    const centroCentral: [number, number] = tieneCoordsCentral
+        ? [companiaLat as number, companiaLng as number]
+        : DEFAULT_LIMA_COORDS;
 
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
@@ -108,7 +120,7 @@ export default function PanelMapaCalor({ ui, tema }: PanelMapaCalorProps) {
             LRef.current = L;
 
             if (!mapRef.current) {
-                mapRef.current = L.map('heatmap-container').setView([-6.7714, -79.8449], 13); // Centro por defecto
+                mapRef.current = L.map('heatmap-container').setView(centroCentral, 13);
 
                 L.tileLayer(
                     'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
@@ -126,6 +138,12 @@ export default function PanelMapaCalor({ ui, tema }: PanelMapaCalorProps) {
             }
         };
     }, [modoClaro]);
+
+    useEffect(() => {
+        if (mapRef.current && tieneCoordsCentral) {
+            mapRef.current.setView(centroCentral, 13);
+        }
+    }, [companiaLat, companiaLng]);
 
     // 3. Actualizar la capa de calor cuando cambia la data
     useEffect(() => {
@@ -287,6 +305,31 @@ export default function PanelMapaCalor({ ui, tema }: PanelMapaCalorProps) {
 
                 {/* Contenedor del Mapa */}
                 <div style={{ flex: 1, borderRadius: '12px', overflow: 'hidden', position: 'relative' }}>
+                    <button
+                        type="button"
+                        onClick={() => {
+                            if (mapRef.current) {
+                                mapRef.current.setView(centroCentral, 13, { animate: true });
+                            }
+                        }}
+                        style={{
+                            position: 'absolute',
+                            top: '12px',
+                            right: '12px',
+                            zIndex: 1000,
+                            padding: '8px 12px',
+                            borderRadius: '8px',
+                            border: `1px solid ${ui.border}`,
+                            backgroundColor: ui.panel,
+                            color: ui.text,
+                            fontSize: '12px',
+                            fontWeight: 600,
+                            cursor: 'pointer',
+                            boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
+                        }}
+                    >
+                        Centrar en Central
+                    </button>
                     {cargando && (
                         <div style={{
                             position: 'absolute', inset: 0, zIndex: 1000,

@@ -10,6 +10,7 @@ export default function PanelDetalleEmergencia({
     actualizando,
     despacharUnidad,
     reasignarUnidad,
+    marcarFalsaAlarma,
     formatFecha,
     verTestigos
 }: any) {
@@ -20,6 +21,8 @@ export default function PanelDetalleEmergencia({
     const [modalReasignarAbierto, setModalReasignarAbierto] = React.useState(false);
     const [nuevaUnidadId, setNuevaUnidadId] = React.useState('');
     const [motivoReasignacion, setMotivoReasignacion] = React.useState('');
+    const [modalFalsaAlarmaAbierto, setModalFalsaAlarmaAbierto] = React.useState(false);
+    const [motivoFalsaAlarma, setMotivoFalsaAlarma] = React.useState('');
     const [direccionResuelta, setDireccionResuelta] = React.useState<string>('');
 
     React.useEffect(() => {
@@ -27,6 +30,8 @@ export default function PanelDetalleEmergencia({
         setModalReasignarAbierto(false);
         setNuevaUnidadId('');
         setMotivoReasignacion('');
+        setModalFalsaAlarmaAbierto(false);
+        setMotivoFalsaAlarma('');
     }, [seleccionada?.id]);
 
     const coordenadasEmergencia = React.useMemo(() => {
@@ -147,14 +152,38 @@ export default function PanelDetalleEmergencia({
                     </p>
                 </div>
 
-                {/* Badge estado */}
-                <div style={{
-                    padding: '8px 16px', borderRadius: '20px',
-                    backgroundColor: badgeColor + '22',
-                    color: badgeColor,
-                    fontWeight: 'bold', fontSize: '14px',
-                }}>
-                    {seleccionada.estado.toUpperCase().replace('_', ' ')}
+                {/* Badge estado + Desestimar Falsa Alarma */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                    {(seleccionada.estado === 'pendiente' || seleccionada.estado === 'asignado') && (
+                        <button
+                            type="button"
+                            disabled={actualizando}
+                            onClick={() => {
+                                setMotivoFalsaAlarma('');
+                                setModalFalsaAlarmaAbierto(true);
+                            }}
+                            style={{
+                                padding: '8px 14px',
+                                borderRadius: '10px',
+                                border: '1px solid rgba(230, 57, 70, 0.35)',
+                                backgroundColor: 'rgba(230, 57, 70, 0.08)',
+                                color: '#E63946',
+                                fontWeight: 700,
+                                fontSize: '12.5px',
+                                cursor: actualizando ? 'not-allowed' : 'pointer',
+                            }}
+                        >
+                            Marcar Falsa Alarma
+                        </button>
+                    )}
+                    <div style={{
+                        padding: '8px 16px', borderRadius: '20px',
+                        backgroundColor: badgeColor + '22',
+                        color: badgeColor,
+                        fontWeight: 'bold', fontSize: '14px',
+                    }}>
+                        {seleccionada.estado.toUpperCase().replace('_', ' ')}
+                    </div>
                 </div>
             </div>
 
@@ -625,6 +654,146 @@ export default function PanelDetalleEmergencia({
                                 }}
                             >
                                 {actualizando ? 'Reasignando...' : 'Confirmar Reasignación'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Modal Confirmar Falsa Alarma */}
+            {modalFalsaAlarmaAbierto && (
+                <div
+                    onClick={() => !actualizando && setModalFalsaAlarmaAbierto(false)}
+                    style={{
+                        position: 'fixed',
+                        inset: 0,
+                        backgroundColor: 'rgba(0,0,0,0.65)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        zIndex: 99999,
+                        padding: '20px',
+                    }}
+                >
+                    <div
+                        onClick={(e) => e.stopPropagation()}
+                        style={{
+                            width: '440px',
+                            maxWidth: '95vw',
+                            backgroundColor: ui.panel,
+                            borderRadius: '12px',
+                            border: `1px solid ${ui.border}`,
+                            padding: '24px',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: '14px',
+                        }}
+                    >
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <div>
+                                <h2 style={{ margin: 0, fontSize: '17px', fontWeight: 700, color: ui.text }}>
+                                    Confirmar Falsa Alarma
+                                </h2>
+                                <p style={{ margin: '2px 0 0', fontSize: '12px', color: ui.mutedText }}>
+                                    Esta acción descartará la emergencia y liberará cualquier unidad asignada.
+                                </p>
+                            </div>
+                            <button
+                                type="button"
+                                disabled={actualizando}
+                                onClick={() => setModalFalsaAlarmaAbierto(false)}
+                                style={{
+                                    background: 'transparent',
+                                    border: `1px solid ${ui.border}`,
+                                    borderRadius: '6px',
+                                    color: ui.mutedText,
+                                    width: '28px',
+                                    height: '28px',
+                                    cursor: 'pointer',
+                                    fontWeight: 700,
+                                }}
+                            >
+                                X
+                            </button>
+                        </div>
+
+                        <div>
+                            <label style={{
+                                display: 'block',
+                                fontSize: '11px',
+                                fontWeight: 700,
+                                color: ui.mutedText,
+                                marginBottom: '6px',
+                                textTransform: 'uppercase',
+                            }}>
+                                Motivo de descarte (obligatorio)
+                            </label>
+                            <textarea
+                                rows={3}
+                                value={motivoFalsaAlarma}
+                                onChange={(e) => setMotivoFalsaAlarma(e.target.value)}
+                                placeholder="Ej. Evidencia fotográfica sin siniestro"
+                                disabled={actualizando}
+                                style={{
+                                    width: '100%',
+                                    padding: '10px 12px',
+                                    borderRadius: '8px',
+                                    border: `1px solid ${ui.border}`,
+                                    backgroundColor: ui.surface,
+                                    color: ui.text,
+                                    fontSize: '13px',
+                                    resize: 'vertical',
+                                    outline: 'none',
+                                }}
+                            />
+                        </div>
+
+                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '4px' }}>
+                            <button
+                                type="button"
+                                disabled={actualizando}
+                                onClick={() => setModalFalsaAlarmaAbierto(false)}
+                                style={{
+                                    padding: '9px 16px',
+                                    borderRadius: '8px',
+                                    border: `1px solid ${ui.border}`,
+                                    backgroundColor: 'transparent',
+                                    color: ui.mutedText,
+                                    fontSize: '13px',
+                                    fontWeight: 600,
+                                    cursor: 'pointer',
+                                }}
+                            >
+                                Cancelar
+                            </button>
+                            <button
+                                type="button"
+                                disabled={actualizando || !motivoFalsaAlarma.trim()}
+                                onClick={async () => {
+                                    if (!marcarFalsaAlarma) return;
+                                    const ok = await marcarFalsaAlarma(seleccionada, motivoFalsaAlarma.trim());
+                                    if (ok) {
+                                        setModalFalsaAlarmaAbierto(false);
+                                    }
+                                }}
+                                style={{
+                                    padding: '9px 18px',
+                                    borderRadius: '8px',
+                                    border: 'none',
+                                    backgroundColor: (actualizando || !motivoFalsaAlarma.trim())
+                                        ? ui.border
+                                        : '#E63946',
+                                    color: (actualizando || !motivoFalsaAlarma.trim())
+                                        ? ui.mutedText
+                                        : '#FFFFFF',
+                                    fontSize: '13px',
+                                    fontWeight: 600,
+                                    cursor: (actualizando || !motivoFalsaAlarma.trim())
+                                        ? 'not-allowed'
+                                        : 'pointer',
+                                }}
+                            >
+                                {actualizando ? 'Guardando...' : 'Confirmar Falsa Alarma'}
                             </button>
                         </div>
                     </div>

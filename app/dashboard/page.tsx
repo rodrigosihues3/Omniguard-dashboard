@@ -284,7 +284,7 @@ export default function DashboardPage() {
   const cargarCompania = useCallback(async (companiaId: string) => {
     const { data, error } = await supabase
       .from('companias_bomberos')
-      .select('id, nombre, unidades_disponibles, unidades_totales')
+      .select('id, nombre, unidades_disponibles, unidades_totales, latitud, longitud')
       .eq('id', companiaId)
       .single();
     if (!error && data) setCompania(data);
@@ -936,6 +936,109 @@ export default function DashboardPage() {
           <span style={{ fontWeight: 600, fontSize: '14px', color: ui.text }}>Error al reasignar</span>
           <span style={{ fontSize: '12.5px', color: ui.mutedText }}>
             No se pudo completar la reasignación de unidad.
+          </span>
+        </div>,
+        {
+          id: toastId,
+          style: {
+            background: modoClaro ? '#FFFFFF' : '#161616',
+            color: ui.text,
+            border: `1px solid ${ui.border}`,
+            borderRadius: '12px',
+            padding: '12px 16px',
+          },
+        }
+      );
+      return false;
+    } finally {
+      setActualizando(false);
+    }
+  };
+
+  const marcarFalsaAlarma = async (emergencia: any, motivo: string): Promise<boolean> => {
+    if (!emergencia?.id || !motivo.trim()) return false;
+
+    setActualizando(true);
+    const toastId = toast.loading(
+      <span style={{ fontWeight: 500, fontSize: '13.5px' }}>Registrando falsa alarma...</span>,
+      {
+        style: {
+          background: modoClaro ? '#FFFFFF' : '#161616',
+          color: ui.text,
+          border: `1px solid ${ui.border}`,
+          borderRadius: '12px',
+          padding: '12px 16px',
+        },
+      }
+    );
+
+    try {
+      const motivoLimpio = motivo.trim();
+      const informeFinal = emergencia.informe_bombero
+        ? `${emergencia.informe_bombero}\n[FALSA ALARMA: ${motivoLimpio}]`
+        : motivoLimpio;
+      const actualizadoEn = new Date().toISOString();
+
+      const { error } = await supabase
+        .from('emergencias')
+        .update({
+          estado: 'falsa_alarma',
+          informe_bombero: informeFinal,
+          actualizado_en: actualizadoEn,
+        })
+        .eq('id', emergencia.id);
+
+      if (error) throw error;
+
+      setEmergencias((prev) =>
+        prev.map((item) =>
+          item.id === emergencia.id
+            ? { ...item, estado: 'falsa_alarma', informe_bombero: informeFinal, actualizado_en: actualizadoEn }
+            : item
+        )
+      );
+
+      setSeleccionada((prev: any) =>
+        prev && prev.id === emergencia.id
+          ? { ...prev, estado: 'falsa_alarma', informe_bombero: informeFinal, actualizado_en: actualizadoEn }
+          : prev
+      );
+
+      const companiaId = emergencia.compania_asignada_id || usuario?.compania_id;
+      if (companiaId) {
+        await cargarUnidades(companiaId);
+        await cargarCompania(companiaId);
+      }
+      await cargarEmergencias();
+
+      toast.success(
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+          <span style={{ fontWeight: 600, fontSize: '14px', color: ui.text }}>Emergencia descartada</span>
+          <span style={{ fontSize: '12.5px', color: ui.mutedText }}>
+            Marcada como falsa alarma.
+          </span>
+        </div>,
+        {
+          id: toastId,
+          style: {
+            background: modoClaro ? '#FFFFFF' : '#161616',
+            color: ui.text,
+            border: `1px solid ${ui.border}`,
+            borderRadius: '12px',
+            padding: '12px 16px',
+          },
+          duration: 2500,
+        }
+      );
+
+      return true;
+    } catch (error) {
+      console.error('Error al marcar falsa alarma:', error);
+      toast.error(
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+          <span style={{ fontWeight: 600, fontSize: '14px', color: ui.text }}>Error</span>
+          <span style={{ fontSize: '12.5px', color: ui.mutedText }}>
+            No se pudo marcar la emergencia como falsa alarma.
           </span>
         </div>,
         {
@@ -1749,7 +1852,12 @@ export default function DashboardPage() {
       <div ref={panelDerechoRef} style={{ flex: 1, overflowY: 'auto' }}>
 
         {vistaActiva === 'mapaCalor' && (
-          <PanelMapaCalor ui={ui} tema={tema} />
+          <PanelMapaCalor
+            ui={ui}
+            tema={tema}
+            companiaLat={compania?.latitud}
+            companiaLng={compania?.longitud}
+          />
         )}
 
         {vistaActiva === 'gestionFlota' && usuario.compania_id && (
@@ -1776,6 +1884,7 @@ export default function DashboardPage() {
             actualizando={actualizando}
             despacharUnidad={despacharUnidad}
             reasignarUnidad={reasignarUnidad}
+            marcarFalsaAlarma={marcarFalsaAlarma}
             formatFecha={formatFecha}
             verTestigos={verTestigos}
           />
