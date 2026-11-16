@@ -20,6 +20,7 @@ export default function PanelDetalleEmergencia({
     const [modalReasignarAbierto, setModalReasignarAbierto] = React.useState(false);
     const [nuevaUnidadId, setNuevaUnidadId] = React.useState('');
     const [motivoReasignacion, setMotivoReasignacion] = React.useState('');
+    const [direccionResuelta, setDireccionResuelta] = React.useState<string>('');
 
     React.useEffect(() => {
         setUnidadSeleccionadaId('');
@@ -27,6 +28,76 @@ export default function PanelDetalleEmergencia({
         setNuevaUnidadId('');
         setMotivoReasignacion('');
     }, [seleccionada?.id]);
+
+    const coordenadasEmergencia = React.useMemo(() => {
+        if (
+            seleccionada?.latitud !== undefined &&
+            seleccionada?.latitud !== null &&
+            seleccionada?.longitud !== undefined &&
+            seleccionada?.longitud !== null
+        ) {
+            const lat = Number(seleccionada.latitud);
+            const lng = Number(seleccionada.longitud);
+            if (!Number.isNaN(lat) && !Number.isNaN(lng)) {
+                return { lat, lng };
+            }
+        }
+        if (typeof seleccionada?.ubicacion === 'string') {
+            const match = seleccionada.ubicacion.match(/POINT\(([-\d.]+)\s+([-\d.]+)\)/i);
+            if (match) {
+                const lng = Number.parseFloat(match[1]);
+                const lat = Number.parseFloat(match[2]);
+                if (!Number.isNaN(lat) && !Number.isNaN(lng)) {
+                    return { lat, lng };
+                }
+            }
+        }
+        return null;
+    }, [seleccionada?.latitud, seleccionada?.longitud, seleccionada?.ubicacion]);
+
+    const direccionDirecta = React.useMemo(() => {
+        const raw = (seleccionada?.direccion_aproximada || seleccionada?.direccion || '').trim();
+        if (raw && raw !== 'No disponible') return raw;
+        return '';
+    }, [seleccionada?.direccion_aproximada, seleccionada?.direccion]);
+
+    React.useEffect(() => {
+        if (direccionDirecta) {
+            setDireccionResuelta(direccionDirecta);
+            return;
+        }
+
+        if (!coordenadasEmergencia) {
+            setDireccionResuelta('No disponible');
+            return;
+        }
+
+        const { lat, lng } = coordenadasEmergencia;
+        const fallbackCoords = `Lat: ${lat.toFixed(5)}, Lng: ${lng.toFixed(5)}`;
+        setDireccionResuelta(fallbackCoords);
+
+        const controller = new AbortController();
+        fetch(
+            `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`,
+            { signal: controller.signal }
+        )
+            .then((res) => (res.ok ? res.json() : null))
+            .then((data) => {
+                if (!data) return;
+                const addr = data.address || {};
+                const calle = addr.road || addr.pedestrian || addr.residential || '';
+                const distrito = addr.suburb || addr.city_district || addr.town || addr.city || '';
+                const texto = [calle, distrito].filter(Boolean).join(', ') || data.display_name || '';
+                if (texto) {
+                    setDireccionResuelta(texto);
+                }
+            })
+            .catch(() => {
+                // Mantiene las coordenadas como respaldo si falla la consulta
+            });
+
+        return () => controller.abort();
+    }, [seleccionada?.id, direccionDirecta, coordenadasEmergencia]);
 
     const unidadesDisponibles = React.useMemo(
         () => (unidades || []).filter((u: any) => u.estado === 'disponible'),
@@ -93,7 +164,7 @@ export default function PanelDetalleEmergencia({
                     {/* Dirección */}
                     <div style={{ backgroundColor: ui.panel, borderRadius: '16px', padding: '14px 16px', border: `1px solid ${ui.border}` }}>
                         <h3 style={{ color: ui.mutedText, fontSize: '11px', fontWeight: 700, margin: '0 0 6px 0' }}>DIRECCIÓN APROXIMADA</h3>
-                        <div style={{ fontSize: '15px', fontWeight: 'bold', color: ui.text }}>{seleccionada.direccion_aproximada || 'No disponible'}</div>
+                        <div style={{ fontSize: '15px', fontWeight: 'bold', color: ui.text }}>{direccionResuelta || 'No disponible'}</div>
                         <div style={{ color: ui.mutedText, fontSize: '12px', marginTop: '4px' }}>{seleccionada.creado_en ? formatFecha(seleccionada.creado_en) : '-'}</div>
                     </div>
 
@@ -185,7 +256,7 @@ export default function PanelDetalleEmergencia({
                     </div>
 
                     {/* Despacho de Unidad o Unidad Asignada */}
-                    {seleccionada.estado === 'asignado' && !seleccionada.unidad_asignada_id && (
+                    {['pendiente', 'asignado'].includes(seleccionada.estado) && !seleccionada.unidad_asignada_id && (
                         <div style={{
                             backgroundColor: ui.panel,
                             borderRadius: '16px',

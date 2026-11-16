@@ -245,6 +245,7 @@ export default function NuevaEmergenciaPopup({ emergencia, onClose, onVerDetalle
           }}
         >
           <button
+            type="button"
             onClick={onVerDetalle}
             onMouseEnter={() => setHoveredBtn('ver')}
             onMouseLeave={() => setHoveredBtn(null)}

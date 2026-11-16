@@ -200,6 +200,7 @@ export default function DashboardPage() {
   const [compania, setCompania] = useState<any>(null);
   const [unidades, setUnidades] = useState<any[]>([]);
   const seleccionadaRef = useRef<any>(null);
+  const panelDerechoRef = useRef<HTMLDivElement | null>(null);
   const [modalTestigos, setModalTestigos] = useState<any>(null);
   const [testigos, setTestigos] = useState<any[]>([]);
   const [cargandoTestigos, setCargandoTestigos] = useState(false);
@@ -737,7 +738,7 @@ export default function DashboardPage() {
     try {
       const { error: errorEmergencia } = await supabase
         .from('emergencias')
-        .update({ unidad_asignada_id: unidadId })
+        .update({ unidad_asignada_id: unidadId, estado: 'asignado' })
         .eq('id', emergenciaId);
 
       if (errorEmergencia) throw errorEmergencia;
@@ -751,20 +752,6 @@ export default function DashboardPage() {
 
       const companiaId = seleccionadaRef.current?.compania_asignada_id || usuario?.compania_id;
       if (companiaId) {
-        const { data: compData } = await supabase
-          .from('companias_bomberos')
-          .select('unidades_disponibles')
-          .eq('id', companiaId)
-          .single();
-
-        if (compData) {
-          const nuevasDisponibles = Math.max((compData.unidades_disponibles ?? 0) - 1, 0);
-          await supabase
-            .from('companias_bomberos')
-            .update({ unidades_disponibles: nuevasDisponibles })
-            .eq('id', companiaId);
-        }
-
         await cargarUnidades(companiaId);
         await cargarCompania(companiaId);
       }
@@ -917,6 +904,7 @@ export default function DashboardPage() {
       const companiaId = emergencia.compania_asignada_id || usuario?.compania_id;
       if (companiaId) {
         await cargarUnidades(companiaId);
+        await cargarCompania(companiaId);
       }
       await cargarEmergencias();
 
@@ -1079,7 +1067,13 @@ export default function DashboardPage() {
         onClose={() => setNuevaEmergenciaAsignada(null)}
         onVerDetalle={() => {
           if (nuevaEmergenciaAsignada) {
+            setFiltro('pendiente');
             setSeleccionada(nuevaEmergenciaAsignada);
+            setVistaActiva('detalle');
+            window.setTimeout(() => {
+              panelDerechoRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
+              panelDerechoRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }, 50);
           }
           setNuevaEmergenciaAsignada(null);
         }}
@@ -1752,7 +1746,7 @@ export default function DashboardPage() {
       </div>
 
       {/* ── PANEL DERECHO ── */}
-      <div style={{ flex: 1, overflowY: 'auto' }}>
+      <div ref={panelDerechoRef} style={{ flex: 1, overflowY: 'auto' }}>
 
         {vistaActiva === 'mapaCalor' && (
           <PanelMapaCalor ui={ui} tema={tema} />

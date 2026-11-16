@@ -320,6 +320,29 @@ export default function PanelGestionFlota({
     }
   };
 
+  const handleLiberarUnidad = async (unidad: UnidadBombero) => {
+    setProcesando(true);
+    try {
+      const { error } = await supabase
+        .from('unidades_bomberos')
+        .update({ estado: 'disponible' })
+        .eq('id', unidad.id);
+
+      if (error) throw error;
+
+      await sincronizarContadoresCompania();
+      await cargarFlota();
+      if (onFlotaActualizada) await onFlotaActualizada();
+
+      toast.success(`Unidad ${unidad.codigo_unidad} liberada`);
+    } catch (error) {
+      console.error('Error al liberar unidad:', error);
+      toast.error('No se pudo liberar la unidad');
+    } finally {
+      setProcesando(false);
+    }
+  };
+
   const abrirModalNuevaCuenta = () => {
     const unidadesActivas = unidades.filter((u) => u.activa);
     const primeraDisponible = unidadesActivas.find((u) => {
@@ -588,23 +611,44 @@ export default function PanelGestionFlota({
                         </span>
                       </td>
                       <td style={{ padding: '10px 14px' }}>
-                        <button
-                          type="button"
-                          disabled={procesando}
-                          onClick={() => handleToggleEstadoUnidad(unidad)}
-                          style={{
-                            padding: '5px 10px',
-                            borderRadius: '6px',
-                            border: `1px solid ${unidad.activa ? 'rgba(230, 57, 70, 0.28)' : 'rgba(45, 198, 83, 0.28)'}`,
-                            backgroundColor: unidad.activa ? 'rgba(230, 57, 70, 0.08)' : 'rgba(45, 198, 83, 0.08)',
-                            color: unidad.activa ? '#E63946' : '#2DC653',
-                            fontSize: '12px',
-                            fontWeight: 600,
-                            cursor: procesando ? 'not-allowed' : 'pointer',
-                          }}
-                        >
-                          {unidad.activa ? 'Desactivar' : 'Activar'}
-                        </button>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <button
+                            type="button"
+                            disabled={procesando}
+                            onClick={() => handleToggleEstadoUnidad(unidad)}
+                            style={{
+                              padding: '5px 10px',
+                              borderRadius: '6px',
+                              border: `1px solid ${unidad.activa ? 'rgba(230, 57, 70, 0.28)' : 'rgba(45, 198, 83, 0.28)'}`,
+                              backgroundColor: unidad.activa ? 'rgba(230, 57, 70, 0.08)' : 'rgba(45, 198, 83, 0.08)',
+                              color: unidad.activa ? '#E63946' : '#2DC653',
+                              fontSize: '12px',
+                              fontWeight: 600,
+                              cursor: procesando ? 'not-allowed' : 'pointer',
+                            }}
+                          >
+                            {unidad.activa ? 'Desactivar' : 'Activar'}
+                          </button>
+                          {unidad.estado === 'en_servicio' && (
+                            <button
+                              type="button"
+                              disabled={procesando}
+                              onClick={() => handleLiberarUnidad(unidad)}
+                              style={{
+                                padding: '5px 10px',
+                                borderRadius: '6px',
+                                border: `1px solid ${ui.border}`,
+                                backgroundColor: ui.surface,
+                                color: ui.text,
+                                fontSize: '12px',
+                                fontWeight: 600,
+                                cursor: procesando ? 'not-allowed' : 'pointer',
+                              }}
+                            >
+                              Liberar
+                            </button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   );
