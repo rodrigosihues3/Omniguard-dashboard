@@ -79,10 +79,8 @@ export function MapPickerCanvas({
             style={{ height: '100%', width: '100%', borderRadius: '16px' }}
         >
             <TileLayer
-                url={tema === 'light'
-                    ? 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png'
-                    : 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'}
-                attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+                url="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
+                attribution="© OpenStreetMap contributors"
             />
             <ClickSelector />
             <Marker

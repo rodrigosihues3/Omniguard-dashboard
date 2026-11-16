@@ -111,10 +111,8 @@ export default function PanelMapaCalor({ ui, tema }: PanelMapaCalorProps) {
                 mapRef.current = L.map('heatmap-container').setView([-6.7714, -79.8449], 13); // Centro por defecto
 
                 L.tileLayer(
-                    modoClaro
-                        ? 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png'
-                        : 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
-                    { attribution: '© OpenStreetMap', subdomains: 'abcd' }
+                    'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                    { attribution: '© OpenStreetMap contributors' }
                 ).addTo(mapRef.current);
             }
         };
