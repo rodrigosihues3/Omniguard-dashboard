@@ -5,6 +5,7 @@ export interface Compania {
   nombre: string;
   direccion: string;
   telefono: string;
+  email?: string | null;
   latitud?: number | null;
   longitud?: number | null;
   ubicacion?: string | null;

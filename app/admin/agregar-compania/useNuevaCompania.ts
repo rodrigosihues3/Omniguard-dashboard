@@ -6,6 +6,8 @@ type NuevaCompaniaForm = {
     nombre: string;
     direccion: string;
     telefono: string;
+    email: string;
+    password: string;
     latitud: string;
     longitud: string;
     unidadesTotales: string;
@@ -19,6 +21,8 @@ const DEFAULT_FORM: NuevaCompaniaForm = {
     nombre: '',
     direccion: '',
     telefono: '',
+    email: '',
+    password: '',
     latitud: '',
     longitud: '',
     unidadesTotales: '1',
@@ -108,6 +112,8 @@ export function useNuevaCompania() {
         const nombre = sanitizeText(nuevaCompania.nombre);
         const direccion = sanitizeText(nuevaCompania.direccion);
         const telefono = sanitizePhone(nuevaCompania.telefono);
+        const email = nuevaCompania.email.trim().toLowerCase();
+        const password = nuevaCompania.password.trim() || 'bomberos123';
         const latitud = sanitizeCoordinateInput(nuevaCompania.latitud);
         const longitud = sanitizeCoordinateInput(nuevaCompania.longitud);
         const unidadesTotales = Number.parseInt(nuevaCompania.unidadesTotales, 10);
@@ -118,6 +124,10 @@ export function useNuevaCompania() {
         if (!direccion) errores.direccion = 'La dirección es obligatoria';
         if (!telefono) errores.telefono = 'El teléfono es obligatorio';
         else if (telefono.length !== 9) errores.telefono = 'El teléfono debe tener 9 dígitos';
+        if (!email) errores.email = 'El correo es obligatorio';
+        else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+            errores.email = 'Ingresa un correo electrónico válido';
+        }
         if (!latitud) errores.latitud = 'La latitud es obligatoria';
         else if (Number.isNaN(latitudNum) || latitudNum < -90 || latitudNum > 90) {
             errores.latitud = 'La latitud debe estar entre -90 y 90';
@@ -132,17 +142,16 @@ export function useNuevaCompania() {
             errores.unidadesTotales = 'Ingresa un número válido mayor o igual a 0';
         }
 
-        const ubicacionWkt = `POINT(${longitudNum} ${latitudNum})`;
-
         return {
             errores,
             payload: {
                 nombre,
                 direccion,
                 telefono,
+                email,
+                password,
                 latitud: latitudNum,
                 longitud: longitudNum,
-                ubicacion: ubicacionWkt,
                 unidadesTotales,
             },
         };
@@ -167,9 +176,10 @@ export function useNuevaCompania() {
                 nombre: payload.nombre,
                 direccion: payload.direccion,
                 telefono: payload.telefono,
+                email: payload.email,
+                password: payload.password,
                 latitud: payload.latitud,
                 longitud: payload.longitud,
-                ubicacion: payload.ubicacion,
                 unidades_totales: payload.unidadesTotales,
                 unidades_disponibles: unidadesDisponibles,
                 activa: nuevaCompania.activa,

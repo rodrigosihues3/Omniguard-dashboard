@@ -303,15 +303,17 @@ export default function CompaniasPage() {
             }}>
                 <div style={{
                     display: 'grid',
-                    gridTemplateColumns: '2.5fr 2.5fr 1.2fr 80px 100px 160px',
+                    gridTemplateColumns: '2fr 2fr 2fr 1.1fr 80px 100px 160px',
                     padding: '16px',
                     backgroundColor: ui.surface,
                     borderBottom: `1px solid ${ui.border}`,
                     fontWeight: 'bold',
                     fontSize: '12px',
                     color: ui.mutedText,
+                    gap: '12px',
                 }}>
                     <div>NOMBRE</div>
+                    <div>CORREO</div>
                     <div>DIRECCIÓN</div>
                     <div style={{ textAlign: 'center' }}>TELÉFONO</div>
                     <div style={{ textAlign: 'center' }}>UNIDADES</div>
@@ -325,13 +327,23 @@ export default function CompaniasPage() {
                     companias.map(compania => (
                         <div key={compania.id} style={{
                             display: 'grid',
-                            gridTemplateColumns: '2.5fr 2.5fr 1.2fr 80px 100px 160px',
+                            gridTemplateColumns: '2fr 2fr 2fr 1.1fr 80px 100px 160px',
                             padding: '16px',
                             borderBottom: `1px solid ${ui.border}`,
                             alignItems: 'center',
                             fontSize: '14px',
+                            gap: '12px',
                         }}>
                             <div style={{ fontWeight: 'bold', color: ui.text }}>{compania.nombre}</div>
+                            <div style={{
+                                color: compania.email ? ui.text : ui.softerText,
+                                fontSize: '12.5px',
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                                whiteSpace: 'nowrap',
+                            }} title={compania.email || 'Sin correo asignado'}>
+                                {compania.email || 'Sin correo'}
+                            </div>
                             <div style={{ color: ui.mutedText, fontSize: '12px' }}>{compania.direccion}</div>
                             <div style={{ color: ui.mutedText, fontSize: '12px', textAlign: 'center' }}>{compania.telefono}</div>
                             <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
@@ -476,6 +488,7 @@ export default function CompaniasPage() {
                                 </h2>
                                 <p style={{ margin: '4px 0 0', fontSize: '13px', color: ui.mutedText }}>
                                     {companiaEditando.nombre}
+                                    {companiaEditando.email ? ` • ${companiaEditando.email}` : ''}
                                 </p>
                             </div>
                             <button

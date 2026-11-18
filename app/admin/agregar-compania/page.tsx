@@ -1,11 +1,13 @@
 'use client';
 
+import { useState } from 'react';
 import { useAdminContext } from '../AdminContext';
 import { useNuevaCompania } from './useNuevaCompania';
 import { MapPickerCanvas } from '../components/MapPickerCanvas';
 
 export default function AgregarCompaniaPage() {
     const { ui, modoClaro, tema } = useAdminContext();
+    const [mostrarPassword, setMostrarPassword] = useState(false);
     const {
         isSavingCompania,
         nuevaCompania,
@@ -227,6 +229,106 @@ export default function AgregarCompaniaPage() {
                                 <span style={{ color: ui.mutedText, fontSize: '12px' }}>
                                     Define si la compañía queda activa al registrarla.
                                 </span>
+                            </div>
+                        </div>
+
+                        {/* Credenciales de acceso */}
+                        <div style={{
+                            gridColumn: '1 / -1',
+                            border: `1px solid ${ui.border}`,
+                            borderRadius: '16px',
+                            padding: '16px',
+                            backgroundColor: ui.surface,
+                            display: 'grid',
+                            gap: '12px',
+                        }}>
+                            <div>
+                                <div style={{ fontSize: '13px', fontWeight: 700, color: ui.text }}>Credenciales de acceso</div>
+                                <div style={{ fontSize: '12px', color: ui.mutedText, marginTop: '4px' }}>
+                                    Cuenta con la que la compañía iniciará sesión en el panel operativo.
+                                </div>
+                            </div>
+
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '16px' }}>
+                                <label style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                    <span style={{ fontSize: '12px', fontWeight: 700, color: ui.text }}>Correo electrónico</span>
+                                    <input
+                                        type="email"
+                                        value={nuevaCompania.email}
+                                        onChange={(event) => actualizarCampoCompania('email', event.target.value)}
+                                        placeholder="compania101@omniguard.pe"
+                                        autoComplete="off"
+                                        style={{
+                                            width: '100%',
+                                            padding: '12px 14px',
+                                            borderRadius: '12px',
+                                            border: `1px solid ${formErrors.email ? ui.dangerText : ui.fieldBorder}`,
+                                            backgroundColor: ui.fieldBackground,
+                                            color: ui.text,
+                                            outline: 'none',
+                                            fontSize: '13px',
+                                        }}
+                                    />
+                                    {formErrors.email && (
+                                        <span style={{ color: ui.dangerText, fontSize: '12px' }}>{formErrors.email}</span>
+                                    )}
+                                </label>
+
+                                <label style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                    <span style={{ fontSize: '12px', fontWeight: 700, color: ui.text }}>Contraseña</span>
+                                    <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                                        <input
+                                            type={mostrarPassword ? 'text' : 'password'}
+                                            value={nuevaCompania.password}
+                                            onChange={(event) => actualizarCampoCompania('password', event.target.value)}
+                                            placeholder="Por defecto: bomberos123"
+                                            autoComplete="new-password"
+                                            style={{
+                                                width: '100%',
+                                                padding: '12px 44px 12px 14px',
+                                                borderRadius: '12px',
+                                                border: `1px solid ${formErrors.password ? ui.dangerText : ui.fieldBorder}`,
+                                                backgroundColor: ui.fieldBackground,
+                                                color: ui.text,
+                                                outline: 'none',
+                                                fontSize: '13px',
+                                            }}
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={() => setMostrarPassword((prev) => !prev)}
+                                            title={mostrarPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+                                            style={{
+                                                position: 'absolute',
+                                                right: '10px',
+                                                background: 'transparent',
+                                                border: 'none',
+                                                color: ui.mutedText,
+                                                cursor: 'pointer',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                                padding: '4px',
+                                            }}
+                                        >
+                                            {mostrarPassword ? (
+                                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                                    <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94" />
+                                                    <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19" />
+                                                    <line x1="1" y1="1" x2="23" y2="23" />
+                                                </svg>
+                                            ) : (
+                                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                                                    <circle cx="12" cy="12" r="3" />
+                                                </svg>
+                                            )}
+                                        </button>
+                                    </div>
+                                    <span style={{ color: ui.mutedText, fontSize: '12px' }}>
+                                        Si se deja vacío, se asignará <strong>bomberos123</strong> por defecto.
+                                    </span>
+                                </label>
                             </div>
                         </div>
 

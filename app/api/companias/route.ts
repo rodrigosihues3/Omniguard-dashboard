@@ -22,13 +22,19 @@ export async function POST(request: Request) {
     const nombre = (body.nombre || '').toString().trim();
     const direccion = (body.direccion || '').toString().trim();
     const telefono = (body.telefono || '').toString().replace(/\D/g, '').slice(0, 9);
+    const email = (body.email || '').toString().trim().toLowerCase();
+    const password = (body.password || '').toString().trim() || 'bomberos123';
     const latitud = Number.parseFloat((body.latitud ?? '').toString());
     const longitud = Number.parseFloat((body.longitud ?? '').toString());
     const unidades_totales = Number.parseInt(body.unidades_totales, 10) || 0;
     const activa = !!body.activa;
 
-    if (!nombre || !direccion || !telefono) {
-      return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
+    if (!nombre || !direccion || !telefono || !email) {
+      return NextResponse.json({ error: 'Faltan campos obligatorios' }, { status: 400 });
+    }
+
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return NextResponse.json({ error: 'El correo electrónico no es válido' }, { status: 400 });
     }
 
     if (Number.isNaN(latitud) || latitud < -90 || latitud > 90) {
@@ -37,6 +43,24 @@ export async function POST(request: Request) {
 
     if (Number.isNaN(longitud) || longitud < -180 || longitud > 180) {
       return NextResponse.json({ error: 'Longitud inválida. Debe estar entre -180 y 180' }, { status: 400 });
+    }
+
+    const { data: existingUser, error: existingError } = await supabaseAdmin
+      .from('usuarios_dashboard')
+      .select('id')
+      .eq('email', email)
+      .maybeSingle();
+
+    if (existingError) {
+      console.error('API /api/companias - email check error:', existingError);
+      return NextResponse.json({ error: existingError.message }, { status: 500 });
+    }
+
+    if (existingUser) {
+      return NextResponse.json(
+        { error: 'Ya existe una cuenta registrada con ese correo electrónico' },
+        { status: 409 }
+      );
     }
 
     const insertPayload = {
@@ -50,22 +74,46 @@ export async function POST(request: Request) {
       activa,
     };
 
-    const { data, error } = await supabaseAdmin
+    const { data: companiaCreada, error } = await supabaseAdmin
       .from('companias_bomberos')
       .insert(insertPayload)
-      .select();
+      .select()
+      .single();
 
-    if (error) {
+    if (error || !companiaCreada) {
       console.error('API /api/companias - insert error details:', {
-        message: error.message,
-        details: (error as any).details,
-        hint: (error as any).hint,
-        code: (error as any).code,
+        message: error?.message,
+        details: (error as any)?.details,
+        hint: (error as any)?.hint,
+        code: (error as any)?.code,
       });
-      return NextResponse.json({ error: error.message, details: (error as any).details }, { status: 500 });
+      return NextResponse.json(
+        { error: error?.message || 'No se pudo registrar la compañía', details: (error as any)?.details },
+        { status: 500 }
+      );
     }
 
-    return NextResponse.json({ data }, { status: 200 });
+    const { error: userError } = await supabaseAdmin
+      .from('usuarios_dashboard')
+      .insert({
+        email,
+        password_hash: password,
+        nombre,
+        rol: 'compania',
+        compania_id: companiaCreada.id,
+        activo: activa,
+      });
+
+    if (userError) {
+      console.error('API /api/companias - insert usuario_dashboard error:', userError);
+      await supabaseAdmin.from('companias_bomberos').delete().eq('id', companiaCreada.id);
+      return NextResponse.json(
+        { error: userError.message || 'No se pudieron crear las credenciales de la compañía' },
+        { status: 500 }
+      );
+    }
+
+    return NextResponse.json({ data: [{ ...companiaCreada, email }] }, { status: 200 });
   } catch (err) {
     console.error('API /api/companias - unexpected error:', err);
     return NextResponse.json({ error: 'Unexpected server error' }, { status: 500 });

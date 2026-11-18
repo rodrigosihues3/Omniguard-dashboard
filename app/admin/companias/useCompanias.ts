@@ -17,13 +17,38 @@ export function useCompanias() {
     const [guardandoEdicion, setGuardandoEdicion] = useState(false);
 
     const cargarCompanias = async () => {
-        const { data, error } = await supabase
-            .from('companias_bomberos')
-            .select('*')
-            .order('nombre');
+        const [resCompanias, resCuentas] = await Promise.all([
+            supabase
+                .from('companias_bomberos')
+                .select('*')
+                .order('nombre'),
+            supabase
+                .from('usuarios_dashboard')
+                .select('compania_id, email, rol, unidad_asignada_id')
+                .not('compania_id', 'is', null),
+        ]);
 
-        if (!error && data) {
-            setCompanias(data);
+        if (!resCompanias.error && resCompanias.data) {
+            const emailPorCompania = new Map<string, string>();
+            (resCuentas.data || []).forEach((cuenta: {
+                compania_id: string | null;
+                email: string;
+                rol: string;
+                unidad_asignada_id: string | null;
+            }) => {
+                if (!cuenta.compania_id) return;
+                const esCuentaPrincipal = cuenta.rol === 'compania' || cuenta.unidad_asignada_id === null;
+                if (esCuentaPrincipal || !emailPorCompania.has(cuenta.compania_id)) {
+                    emailPorCompania.set(cuenta.compania_id, cuenta.email);
+                }
+            });
+
+            setCompanias(
+                resCompanias.data.map((c: Compania) => ({
+                    ...c,
+                    email: emailPorCompania.get(c.id) || null,
+                }))
+            );
         }
         setIsLoading(false);
     };
@@ -42,7 +67,6 @@ export function useCompanias() {
                 companiaActual.unidades_disponibles,
                 payload.unidades_totales
             );
-            const ubicacionWkt = `POINT(${payload.longitud} ${payload.latitud})`;
 
             const { error } = await supabase
                 .from('companias_bomberos')
@@ -53,7 +77,6 @@ export function useCompanias() {
                     unidades_disponibles: disponiblesAjustadas,
                     latitud: payload.latitud,
                     longitud: payload.longitud,
-                    ubicacion: ubicacionWkt,
                 })
                 .eq('id', id);
 
