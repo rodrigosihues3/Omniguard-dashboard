@@ -1,6 +1,8 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import toast from 'react-hot-toast';
+
+const LIMA_DEFAULT_COORDS = { lat: -12.0464, lng: -77.0428 };
 
 type NuevaCompaniaForm = {
     nombre: string;
@@ -47,22 +49,86 @@ export function useNuevaCompania() {
     const [serverError, setServerError] = useState<string | null>(null);
     const [isMapPickerOpen, setIsMapPickerOpen] = useState(false);
     const [mapDraftCoords, setMapDraftCoords] = useState<Coordenadas | null>(null);
+    const [busquedaDireccion, setBusquedaDireccion] = useState('');
+    const [buscandoDireccion, setBuscandoDireccion] = useState(false);
+    const pinMovidoManualmenteRef = useRef(false);
     const router = useRouter();
 
     const abrirMapPicker = () => {
+        pinMovidoManualmenteRef.current = false;
         const lat = Number.parseFloat(nuevaCompania.latitud);
         const lng = Number.parseFloat(nuevaCompania.longitud);
-        if (!Number.isNaN(lat) && !Number.isNaN(lng)) {
+        const tieneCoordsPrevias = !Number.isNaN(lat) && !Number.isNaN(lng);
+
+        if (tieneCoordsPrevias) {
             setMapDraftCoords({ lat, lng });
         } else {
-            setMapDraftCoords({ lat: -6.7714, lng: -79.8386 });
+            setMapDraftCoords(LIMA_DEFAULT_COORDS);
+            if (typeof navigator !== 'undefined' && navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(
+                    (pos) => {
+                        if (!pinMovidoManualmenteRef.current) {
+                            setMapDraftCoords({
+                                lat: pos.coords.latitude,
+                                lng: pos.coords.longitude,
+                            });
+                        }
+                    },
+                    () => {
+                        // Si se niega el permiso o falla, se mantiene Lima por defecto
+                    },
+                    { enableHighAccuracy: true, timeout: 6000 }
+                );
+            }
         }
+        setBusquedaDireccion(nuevaCompania.direccion.trim());
         setIsMapPickerOpen(true);
     };
 
     const cerrarMapPicker = () => setIsMapPickerOpen(false);
 
-    const seleccionarCoordenadasEnMapa = (coords: Coordenadas) => setMapDraftCoords(coords);
+    const seleccionarCoordenadasEnMapa = (coords: Coordenadas) => {
+        pinMovidoManualmenteRef.current = true;
+        setMapDraftCoords(coords);
+    };
+
+    const buscarDireccionEnMapa = async () => {
+        const query = busquedaDireccion.trim();
+        if (!query) {
+            toast.error('Ingresa una dirección para buscar');
+            return;
+        }
+
+        setBuscandoDireccion(true);
+        try {
+            const url = `https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=pe&q=${encodeURIComponent(query)}`;
+            const resp = await fetch(url, {
+                headers: { 'Accept-Language': 'es' },
+            });
+            if (!resp.ok) throw new Error('Error al consultar el buscador');
+            const results = await resp.json();
+
+            if (!Array.isArray(results) || results.length === 0) {
+                toast.error('No se encontró esa dirección en el mapa');
+                return;
+            }
+
+            const lat = Number.parseFloat(results[0].lat);
+            const lng = Number.parseFloat(results[0].lon);
+            if (Number.isNaN(lat) || Number.isNaN(lng)) {
+                toast.error('No se pudieron obtener las coordenadas');
+                return;
+            }
+
+            pinMovidoManualmenteRef.current = true;
+            setMapDraftCoords({ lat, lng });
+        } catch (error) {
+            console.error('Error buscando dirección:', error);
+            toast.error('No se pudo buscar la dirección');
+        } finally {
+            setBuscandoDireccion(false);
+        }
+    };
 
     const confirmarCoordenadasMapa = () => {
         if (!mapDraftCoords) {
@@ -222,10 +288,14 @@ export function useNuevaCompania() {
         serverError,
         isMapPickerOpen,
         mapDraftCoords,
+        busquedaDireccion,
+        setBusquedaDireccion,
+        buscandoDireccion,
         actualizarCampoCompania,
         abrirMapPicker,
         cerrarMapPicker,
         seleccionarCoordenadasEnMapa,
+        buscarDireccionEnMapa,
         confirmarCoordenadasMapa,
         guardarNuevaCompania,
     };

@@ -15,10 +15,14 @@ export default function AgregarCompaniaPage() {
         serverError,
         isMapPickerOpen,
         mapDraftCoords,
+        busquedaDireccion,
+        setBusquedaDireccion,
+        buscandoDireccion,
         actualizarCampoCompania,
         abrirMapPicker,
         cerrarMapPicker,
         seleccionarCoordenadasEnMapa,
+        buscarDireccionEnMapa,
         confirmarCoordenadasMapa,
         guardarNuevaCompania,
     } = useNuevaCompania();
@@ -147,9 +151,98 @@ export default function AgregarCompaniaPage() {
                                 </span>
                             )}
                         </label>
+                    </div>
 
-                        {/* Dirección (Ocupa 2 columnas) */}
-                        <label style={{ gridColumn: 'span 2', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    <hr style={{ border: 'none', borderTop: `1px solid ${ui.border}`, margin: '22px 0' }} />
+
+                    {/* Fila 2: Correo electrónico y Contraseña */}
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '16px' }}>
+                        <label style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                            <span style={{ fontSize: '13px', fontWeight: 700, color: ui.text }}>Correo electrónico</span>
+                            <input
+                                type="email"
+                                value={nuevaCompania.email}
+                                onChange={(event) => actualizarCampoCompania('email', event.target.value)}
+                                placeholder="compania101@omniguard.pe"
+                                autoComplete="off"
+                                style={{
+                                    width: '100%',
+                                    padding: '14px 16px',
+                                    borderRadius: '14px',
+                                    border: `1px solid ${formErrors.email ? ui.dangerText : ui.fieldBorder}`,
+                                    backgroundColor: ui.fieldBackground,
+                                    color: ui.text,
+                                    outline: 'none',
+                                    fontSize: '14px',
+                                }}
+                            />
+                            {formErrors.email && (
+                                <span style={{ color: ui.dangerText, fontSize: '12px' }}>{formErrors.email}</span>
+                            )}
+                        </label>
+
+                        <label style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                            <span style={{ fontSize: '13px', fontWeight: 700, color: ui.text }}>Contraseña</span>
+                            <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                                <input
+                                    type={mostrarPassword ? 'text' : 'password'}
+                                    value={nuevaCompania.password}
+                                    onChange={(event) => actualizarCampoCompania('password', event.target.value)}
+                                    placeholder="Por defecto: bomberos123"
+                                    autoComplete="new-password"
+                                    style={{
+                                        width: '100%',
+                                        padding: '14px 44px 14px 16px',
+                                        borderRadius: '14px',
+                                        border: `1px solid ${formErrors.password ? ui.dangerText : ui.fieldBorder}`,
+                                        backgroundColor: ui.fieldBackground,
+                                        color: ui.text,
+                                        outline: 'none',
+                                        fontSize: '14px',
+                                    }}
+                                />
+                                <button
+                                    type="button"
+                                    onClick={() => setMostrarPassword((prev) => !prev)}
+                                    title={mostrarPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+                                    style={{
+                                        position: 'absolute',
+                                        right: '12px',
+                                        background: 'transparent',
+                                        border: 'none',
+                                        color: ui.mutedText,
+                                        cursor: 'pointer',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        padding: '4px',
+                                    }}
+                                >
+                                    {mostrarPassword ? (
+                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                            <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94" />
+                                            <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19" />
+                                            <line x1="1" y1="1" x2="23" y2="23" />
+                                        </svg>
+                                    ) : (
+                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                                            <circle cx="12" cy="12" r="3" />
+                                        </svg>
+                                    )}
+                                </button>
+                            </div>
+                            <span style={{ color: ui.mutedText, fontSize: '12px' }}>
+                                Si se deja vacío, se asignará <strong>bomberos123</strong> por defecto.
+                            </span>
+                        </label>
+                    </div>
+
+                    <hr style={{ border: 'none', borderTop: `1px solid ${ui.border}`, margin: '22px 0' }} />
+
+                    {/* Fila 3: Dirección + Botón Seleccionar en el mapa */}
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: '16px', alignItems: 'start' }}>
+                        <label style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                             <span style={{ fontSize: '13px', fontWeight: 700, color: ui.text }}>Dirección</span>
                             <input
                                 type="text"
@@ -172,10 +265,77 @@ export default function AgregarCompaniaPage() {
                             )}
                         </label>
 
-                        {/* Estado */}
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                            <span style={{ fontSize: '13px', fontWeight: 700, color: 'transparent', userSelect: 'none' }} aria-hidden="true">
+                                Mapa
+                            </span>
+                            <button
+                                type="button"
+                                onClick={abrirMapPicker}
+                                style={{
+                                    padding: '14px 18px',
+                                    borderRadius: '14px',
+                                    border: `1px solid ${ui.successButtonBorder}`,
+                                    backgroundColor: ui.mapPickerButtonBackground,
+                                    color: ui.mapPickerButtonText,
+                                    cursor: 'pointer',
+                                    fontWeight: 800,
+                                    fontSize: '14px',
+                                    whiteSpace: 'nowrap',
+                                }}
+                            >
+                                Seleccionar en el mapa
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* Fila 4: Latitud, Longitud y Estado */}
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: '16px', alignItems: 'start', marginTop: '16px' }}>
+                        <label style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                            <span style={{ fontSize: '13px', fontWeight: 700, color: ui.text }}>Latitud</span>
+                            <input
+                                type="text"
+                                value={nuevaCompania.latitud}
+                                readOnly
+                                placeholder="Se completa automáticamente"
+                                style={{
+                                    width: '100%',
+                                    padding: '14px 16px',
+                                    borderRadius: '14px',
+                                    border: `1px solid ${formErrors.latitud ? ui.dangerText : nuevaCompania.latitud ? ui.fieldBorderValid : ui.fieldBorder}`,
+                                    backgroundColor: ui.fieldBackground,
+                                    color: ui.text,
+                                    fontSize: '14px',
+                                    outline: 'none',
+                                }}
+                            />
+                            {formErrors.latitud && <span style={{ color: ui.dangerText, fontSize: '12px' }}>{formErrors.latitud}</span>}
+                        </label>
+
+                        <label style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                            <span style={{ fontSize: '13px', fontWeight: 700, color: ui.text }}>Longitud</span>
+                            <input
+                                type="text"
+                                value={nuevaCompania.longitud}
+                                readOnly
+                                placeholder="Se completa automáticamente"
+                                style={{
+                                    width: '100%',
+                                    padding: '14px 16px',
+                                    borderRadius: '14px',
+                                    border: `1px solid ${formErrors.longitud ? ui.dangerText : nuevaCompania.longitud ? ui.fieldBorderValid : ui.fieldBorder}`,
+                                    backgroundColor: ui.fieldBackground,
+                                    color: ui.text,
+                                    fontSize: '14px',
+                                    outline: 'none',
+                                }}
+                            />
+                            {formErrors.longitud && <span style={{ color: ui.dangerText, fontSize: '12px' }}>{formErrors.longitud}</span>}
+                        </label>
+
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                             <span style={{ fontSize: '13px', fontWeight: 700, color: ui.text }}>Estado</span>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', height: '48px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', height: '48px' }}>
                                 <button
                                     type="button"
                                     onClick={() => actualizarCampoCompania('activa', !nuevaCompania.activa)}
@@ -226,186 +386,6 @@ export default function AgregarCompaniaPage() {
                                     }} />
                                     {nuevaCompania.activa ? 'Activa' : 'Inactiva'}
                                 </button>
-                                <span style={{ color: ui.mutedText, fontSize: '12px' }}>
-                                    Define si la compañía queda activa al registrarla.
-                                </span>
-                            </div>
-                        </div>
-
-                        {/* Credenciales de acceso */}
-                        <div style={{
-                            gridColumn: '1 / -1',
-                            border: `1px solid ${ui.border}`,
-                            borderRadius: '16px',
-                            padding: '16px',
-                            backgroundColor: ui.surface,
-                            display: 'grid',
-                            gap: '12px',
-                        }}>
-                            <div>
-                                <div style={{ fontSize: '13px', fontWeight: 700, color: ui.text }}>Credenciales de acceso</div>
-                                <div style={{ fontSize: '12px', color: ui.mutedText, marginTop: '4px' }}>
-                                    Cuenta con la que la compañía iniciará sesión en el panel operativo.
-                                </div>
-                            </div>
-
-                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '16px' }}>
-                                <label style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                                    <span style={{ fontSize: '12px', fontWeight: 700, color: ui.text }}>Correo electrónico</span>
-                                    <input
-                                        type="email"
-                                        value={nuevaCompania.email}
-                                        onChange={(event) => actualizarCampoCompania('email', event.target.value)}
-                                        placeholder="compania101@omniguard.pe"
-                                        autoComplete="off"
-                                        style={{
-                                            width: '100%',
-                                            padding: '12px 14px',
-                                            borderRadius: '12px',
-                                            border: `1px solid ${formErrors.email ? ui.dangerText : ui.fieldBorder}`,
-                                            backgroundColor: ui.fieldBackground,
-                                            color: ui.text,
-                                            outline: 'none',
-                                            fontSize: '13px',
-                                        }}
-                                    />
-                                    {formErrors.email && (
-                                        <span style={{ color: ui.dangerText, fontSize: '12px' }}>{formErrors.email}</span>
-                                    )}
-                                </label>
-
-                                <label style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                                    <span style={{ fontSize: '12px', fontWeight: 700, color: ui.text }}>Contraseña</span>
-                                    <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
-                                        <input
-                                            type={mostrarPassword ? 'text' : 'password'}
-                                            value={nuevaCompania.password}
-                                            onChange={(event) => actualizarCampoCompania('password', event.target.value)}
-                                            placeholder="Por defecto: bomberos123"
-                                            autoComplete="new-password"
-                                            style={{
-                                                width: '100%',
-                                                padding: '12px 44px 12px 14px',
-                                                borderRadius: '12px',
-                                                border: `1px solid ${formErrors.password ? ui.dangerText : ui.fieldBorder}`,
-                                                backgroundColor: ui.fieldBackground,
-                                                color: ui.text,
-                                                outline: 'none',
-                                                fontSize: '13px',
-                                            }}
-                                        />
-                                        <button
-                                            type="button"
-                                            onClick={() => setMostrarPassword((prev) => !prev)}
-                                            title={mostrarPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
-                                            style={{
-                                                position: 'absolute',
-                                                right: '10px',
-                                                background: 'transparent',
-                                                border: 'none',
-                                                color: ui.mutedText,
-                                                cursor: 'pointer',
-                                                display: 'flex',
-                                                alignItems: 'center',
-                                                justifyContent: 'center',
-                                                padding: '4px',
-                                            }}
-                                        >
-                                            {mostrarPassword ? (
-                                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                                    <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94" />
-                                                    <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19" />
-                                                    <line x1="1" y1="1" x2="23" y2="23" />
-                                                </svg>
-                                            ) : (
-                                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
-                                                    <circle cx="12" cy="12" r="3" />
-                                                </svg>
-                                            )}
-                                        </button>
-                                    </div>
-                                    <span style={{ color: ui.mutedText, fontSize: '12px' }}>
-                                        Si se deja vacío, se asignará <strong>bomberos123</strong> por defecto.
-                                    </span>
-                                </label>
-                            </div>
-                        </div>
-
-                        {/* Ubicación Geográfica (Ancho completo) */}
-                        <div style={{
-                            gridColumn: '1 / -1',
-                            border: `1px solid ${ui.border}`,
-                            borderRadius: '16px',
-                            padding: '14px',
-                            backgroundColor: ui.surface,
-                            display: 'grid',
-                            gap: '12px',
-                        }}>
-                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap' }}>
-                                <div>
-                                    <div style={{ fontSize: '13px', fontWeight: 700, color: ui.text }}>Ubicación geográfica</div>
-                                    <div style={{ fontSize: '12px', color: ui.mutedText, marginTop: '4px' }}>
-                                        Selecciona en el mapa para evitar errores de coordenadas.
-                                    </div>
-                                </div>
-                                <button
-                                    type="button"
-                                    onClick={abrirMapPicker}
-                                    style={{
-                                        padding: '10px 14px',
-                                        borderRadius: '12px',
-                                        border: `1px solid ${ui.successButtonBorder}`,
-                                        backgroundColor: ui.mapPickerButtonBackground,
-                                        color: ui.mapPickerButtonText,
-                                        cursor: 'pointer',
-                                        fontWeight: 800,
-                                    }}
-                                >
-                                    Seleccionar en el mapa
-                                </button>
-                            </div>
-
-                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '12px' }}>
-                                <label style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                                    <span style={{ fontSize: '12px', fontWeight: 700, color: ui.text }}>Latitud</span>
-                                    <input
-                                        type="text"
-                                        value={nuevaCompania.latitud}
-                                        readOnly
-                                        placeholder="Se completa automáticamente"
-                                        style={{
-                                            width: '100%',
-                                            padding: '12px 14px',
-                                            borderRadius: '12px',
-                                            border: `1px solid ${formErrors.latitud ? ui.dangerText : nuevaCompania.latitud ? ui.fieldBorderValid : ui.fieldBorder}`,
-                                            backgroundColor: ui.fieldBackground,
-                                            color: ui.text,
-                                            fontSize: '13px',
-                                        }}
-                                    />
-                                    {formErrors.latitud && <span style={{ color: ui.dangerText, fontSize: '12px' }}>{formErrors.latitud}</span>}
-                                </label>
-
-                                <label style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                                    <span style={{ fontSize: '12px', fontWeight: 700, color: ui.text }}>Longitud</span>
-                                    <input
-                                        type="text"
-                                        value={nuevaCompania.longitud}
-                                        readOnly
-                                        placeholder="Se completa automáticamente"
-                                        style={{
-                                            width: '100%',
-                                            padding: '12px 14px',
-                                            borderRadius: '12px',
-                                            border: `1px solid ${formErrors.longitud ? ui.dangerText : nuevaCompania.longitud ? ui.fieldBorderValid : ui.fieldBorder}`,
-                                            backgroundColor: ui.fieldBackground,
-                                            color: ui.text,
-                                            fontSize: '13px',
-                                        }}
-                                    />
-                                    {formErrors.longitud && <span style={{ color: ui.dangerText, fontSize: '12px' }}>{formErrors.longitud}</span>}
-                                </label>
                             </div>
                         </div>
                     </div>
@@ -514,11 +494,55 @@ export default function AgregarCompaniaPage() {
                             display: 'grid', gridTemplateRows: 'auto 1fr auto',
                         }}
                     >
-                        <div style={{ padding: '16px 18px', borderBottom: `1px solid ${ui.border}` }}>
-                            <div style={{ color: ui.text, fontSize: '18px', fontWeight: 800 }}>Seleccionar ubicación de la compañía</div>
-                            <div style={{ color: ui.mutedText, fontSize: '12px', marginTop: '4px' }}>
-                                Haz clic en el mapa o arrastra el pin para ajustar las coordenadas.
+                        <div style={{ padding: '16px 18px', borderBottom: `1px solid ${ui.border}`, display: 'grid', gap: '12px' }}>
+                            <div>
+                                <div style={{ color: ui.text, fontSize: '18px', fontWeight: 800 }}>Seleccionar ubicación de la compañía</div>
+                                <div style={{ color: ui.mutedText, fontSize: '12px', marginTop: '4px' }}>
+                                    Busca una dirección o haz clic / arrastra el pin para ajustar las coordenadas.
+                                </div>
                             </div>
+                            <form
+                                onSubmit={(event) => {
+                                    event.preventDefault();
+                                    buscarDireccionEnMapa();
+                                }}
+                                style={{ display: 'flex', gap: '10px' }}
+                            >
+                                <input
+                                    type="text"
+                                    value={busquedaDireccion}
+                                    onChange={(event) => setBusquedaDireccion(event.target.value)}
+                                    placeholder="Buscar dirección (ej. Av. Arequipa 1234, Miraflores, Lima)"
+                                    style={{
+                                        flex: 1,
+                                        padding: '10px 14px',
+                                        borderRadius: '10px',
+                                        border: `1px solid ${ui.fieldBorder}`,
+                                        backgroundColor: ui.fieldBackground,
+                                        color: ui.text,
+                                        fontSize: '13px',
+                                        outline: 'none',
+                                    }}
+                                />
+                                <button
+                                    type="submit"
+                                    disabled={buscandoDireccion}
+                                    style={{
+                                        padding: '10px 16px',
+                                        borderRadius: '10px',
+                                        border: 'none',
+                                        backgroundColor: ui.primaryButton,
+                                        color: 'white',
+                                        cursor: buscandoDireccion ? 'not-allowed' : 'pointer',
+                                        fontWeight: 700,
+                                        fontSize: '13px',
+                                        opacity: buscandoDireccion ? 0.7 : 1,
+                                        whiteSpace: 'nowrap',
+                                    }}
+                                >
+                                    {buscandoDireccion ? 'Buscando...' : 'Buscar'}
+                                </button>
+                            </form>
                         </div>
 
                         <div style={{ padding: '16px', minHeight: 0 }}>

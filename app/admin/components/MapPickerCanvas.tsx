@@ -4,12 +4,27 @@ import { useEffect, useState } from 'react';
 
 type Coordenadas = { lat: number; lng: number };
 
+function MapViewUpdater({
+    useMapHook,
+    target,
+}: {
+    useMapHook: () => { setView: (center: [number, number], zoom: number, options?: { animate?: boolean }) => void; getZoom: () => number };
+    target: Coordenadas;
+}) {
+    const map = useMapHook();
+    useEffect(() => {
+        map.setView([target.lat, target.lng], map.getZoom(), { animate: true });
+    }, [map, target.lat, target.lng]);
+    return null;
+}
+
 type LeafletBundle = {
     MapContainer: any;
     TileLayer: any;
     Marker: any;
     Popup: any;
     useMapEvents: any;
+    useMap: any;
 };
 
 export function MapPickerCanvas({
@@ -27,7 +42,7 @@ export function MapPickerCanvas({
         const load = async () => {
             await import('leaflet/dist/leaflet.css');
             const L = (await import('leaflet')).default;
-            const { MapContainer, TileLayer, Marker, Popup, useMapEvents } = await import('react-leaflet');
+            const { MapContainer, TileLayer, Marker, Popup, useMapEvents, useMap } = await import('react-leaflet');
 
             delete (L.Icon.Default.prototype as any)._getIconUrl;
             L.Icon.Default.mergeOptions({
@@ -36,7 +51,7 @@ export function MapPickerCanvas({
                 shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
             });
 
-            setLeafletBundle({ MapContainer, TileLayer, Marker, Popup, useMapEvents });
+            setLeafletBundle({ MapContainer, TileLayer, Marker, Popup, useMapEvents, useMap });
         };
 
         load();
@@ -61,7 +76,7 @@ export function MapPickerCanvas({
         );
     }
 
-    const { MapContainer, TileLayer, Marker, Popup, useMapEvents } = leafletBundle;
+    const { MapContainer, TileLayer, Marker, Popup, useMapEvents, useMap } = leafletBundle;
 
     function ClickSelector() {
         useMapEvents({
@@ -82,6 +97,7 @@ export function MapPickerCanvas({
                 url="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
                 attribution="© OpenStreetMap contributors"
             />
+            <MapViewUpdater useMapHook={useMap} target={coords} />
             <ClickSelector />
             <Marker
                 position={[coords.lat, coords.lng]}
